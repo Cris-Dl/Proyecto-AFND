@@ -1,4 +1,5 @@
 flet[desktop]==0.28.3
+flet-map==0.1.0
 requests
 opencv-python
 numpy

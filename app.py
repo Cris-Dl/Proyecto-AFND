@@ -8,6 +8,7 @@ from services.orders_service import OrdersService
 from ui.components import build_sidebar, build_top_bar
 from ui.theme import BACKGROUND, ERROR, SUCCESS, configure_page
 from ui.views import (
+    ROUTE_COORDINATES,
     build_afnd_visualizer,
     build_home_view,
     build_login_view,
@@ -17,6 +18,7 @@ from ui.views import (
     build_product_detail_view,
     build_products_view,
     build_profile_view,
+    build_tracking_view,
 )
 
 
@@ -41,6 +43,8 @@ class GamerGearApp:
         self.secondary_navigation = []
         self.afnd_integration = GamerGearAutomataIntegration()
         self.orders_service = OrdersService()
+        self.selected_order_id = None
+        self.tracking_progress = {}
 
         configure_page(page)
         page.on_resized = self.handle_resize
@@ -75,6 +79,8 @@ class GamerGearApp:
         return {"narrow": 1, "medium": 2, "wide": 3}[self.layout_mode]
 
     def selected_navigation_route(self):
+        if self.current_route == "tracking":
+            return "pedidos"
         if self.current_route == "afnd":
             return "perfil"
         if self.current_route in {"detalle", "revisar_pedido"}:
@@ -148,6 +154,21 @@ class GamerGearApp:
                 on_login=self.open_account,
                 on_track=self.open_tracking,
             )
+
+        if self.current_route == "tracking" and self.usuario_autenticado:
+            order = self.orders_service.get_order_by_id(
+                self.selected_order_id,
+                username=self.usuario_autenticado,
+            )
+            if order:
+                return build_tracking_view(
+                    order=order,
+                    progress_index=self.tracking_progress.get(order.id_pedido, 0),
+                    on_back=lambda: self.navigate("pedidos"),
+                    on_advance=self.advance_tracking,
+                    on_deliver=self.deliver_order,
+                    layout_mode=self.layout_mode,
+                )
 
         if self.current_route == "perfil":
             return build_profile_view(
@@ -292,10 +313,35 @@ class GamerGearApp:
             )
         )
 
-    def open_tracking(self, _order_id):
+    def open_tracking(self, order_id):
+        order = self.orders_service.get_order_by_id(
+            order_id,
+            username=self.usuario_autenticado,
+        )
+        if not order or order.estado_afnd != "q5":
+            self.page.open(ft.SnackBar(ft.Text("Este pedido no está disponible para rastreo."), bgcolor=ERROR))
+            return
+        self.selected_order_id = order.id_pedido
+        self.tracking_progress.setdefault(order.id_pedido, 0)
+        self.current_route = "tracking"
+        self.render()
+
+    def advance_tracking(self):
+        order = self.orders_service.get_order_by_id(
+            self.selected_order_id,
+            username=self.usuario_autenticado,
+        )
+        if not order or order.estado_afnd != "q5":
+            return
+        last_index = len(ROUTE_COORDINATES) - 1
+        current = self.tracking_progress.get(order.id_pedido, 0)
+        self.tracking_progress[order.id_pedido] = min(current + 1, last_index)
+        self.render()
+
+    def deliver_order(self):
         self.page.open(
             ft.SnackBar(
-                ft.Text("El seguimiento se habilitará en el siguiente bloque."),
+                ft.Text("La confirmación persistente se conectará en el siguiente bloque."),
                 bgcolor=SUCCESS,
             )
         )
@@ -303,9 +349,10 @@ class GamerGearApp:
     def logout(self):
         self.usuario_autenticado = None
         self.route_before_login = "inicio"
-        if self.current_route in {"perfil", "revisar_pedido"}:
+        if self.current_route in {"perfil", "revisar_pedido", "tracking"}:
             self.current_route = "inicio"
         self.selected_product = None
+        self.selected_order_id = None
         self.selected_quantity = 1
         self.render()
 

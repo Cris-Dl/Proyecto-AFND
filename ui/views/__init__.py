@@ -9,6 +9,7 @@ from .placeholder import build_placeholder_view
 from .product_detail import build_product_detail_view
 from .products import build_products_view
 from .profile import build_profile_view
+from .tracking import ROUTE_COORDINATES, build_tracking_view
 
 __all__ = [
     "build_afnd_visualizer",
@@ -20,4 +21,6 @@ __all__ = [
     "build_product_detail_view",
     "build_products_view",
     "build_profile_view",
+    "build_tracking_view",
+    "ROUTE_COORDINATES",
 ]

@@ -14,12 +14,23 @@ class FakePage:
 
 
 class FakeOrdersService:
+    def __init__(self):
+        self.order = OrderRecord(1, "demo", "Producto", 1, 10.0, 10.0, "q5")
+
     def create_order(self, products, username, product_id, quantity):
+        self.order = OrderRecord(1, username, "Producto", quantity, 10.0, 10.0 * quantity, "q5")
         return OrderCreationResult(
             success=True,
-            order=OrderRecord(1, username, "Producto", quantity, 10.0, 10.0 * quantity, "q5"),
+            order=self.order,
             message="Pedido confirmado correctamente.",
         )
+
+    def get_order_by_id(self, order_id, username=None):
+        if self.order.id_pedido != order_id:
+            return None
+        if username is not None and self.order.usuario != username:
+            return None
+        return self.order
 
 
 class AppAutomataFlowTests(unittest.TestCase):
@@ -34,6 +45,8 @@ class AppAutomataFlowTests(unittest.TestCase):
         self.application.route_before_login = "inicio"
         self.application.afnd_integration = GamerGearAutomataIntegration()
         self.application.orders_service = FakeOrdersService()
+        self.application.selected_order_id = None
+        self.application.tracking_progress = {}
         self.application.render = lambda *args, **kwargs: None
 
     def test_authenticated_purchase_and_confirmation_emit_i_p_g(self):
@@ -69,6 +82,15 @@ class AppAutomataFlowTests(unittest.TestCase):
     def test_opening_product_does_not_emit_p(self):
         self.application.open_product({"existencia": 4})
         self.assertEqual(self.application.afnd_integration.snapshot().chain, "")
+
+    def test_tracking_progress_moves_without_changing_persisted_state(self):
+        self.application.open_tracking(1)
+        self.application.advance_tracking()
+        self.application.advance_tracking()
+
+        self.assertEqual(self.application.current_route, "tracking")
+        self.assertEqual(self.application.tracking_progress[1], 2)
+        self.assertEqual(self.application.orders_service.order.estado_afnd, "q5")
 
 
 if __name__ == "__main__":

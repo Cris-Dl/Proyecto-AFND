@@ -1,0 +1,244 @@
+import flet as ft
+import flet_map as fmap
+
+from ui.theme import (
+    BORDER,
+    PRIMARY,
+    SECONDARY,
+    SUCCESS,
+    SURFACE,
+    SURFACE_ELEVATED,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+)
+
+
+ROUTE_COORDINATES = (
+    (14.8335, -91.5188),
+    (14.8345, -91.5205),
+    (14.8360, -91.5222),
+    (14.8380, -91.5240),
+    (14.8400, -91.5258),
+)
+
+
+def _point(latitude, longitude):
+    return fmap.MapLatitudeLongitude(latitude, longitude)
+
+
+def _marker(coordinates, icon, color, tooltip):
+    return fmap.Marker(
+        coordinates=_point(*coordinates),
+        width=46,
+        height=46,
+        content=ft.Container(
+            bgcolor=SURFACE_ELEVATED,
+            border=ft.border.all(2, color),
+            border_radius=23,
+            alignment=ft.alignment.center,
+            tooltip=tooltip,
+            content=ft.Icon(icon, color=color, size=25),
+        ),
+    )
+
+
+def _timeline_item(label, state):
+    if state == "done":
+        icon, color = ft.Icons.CHECK_CIRCLE_ROUNDED, SUCCESS
+    elif state == "active":
+        icon, color = ft.Icons.RADIO_BUTTON_CHECKED_ROUNDED, PRIMARY
+    else:
+        icon, color = ft.Icons.RADIO_BUTTON_UNCHECKED_ROUNDED, TEXT_SECONDARY
+    return ft.Row(
+        controls=[
+            ft.Icon(icon, size=18, color=color),
+            ft.Text(label, size=12, color=TEXT_PRIMARY if state != "pending" else TEXT_SECONDARY),
+        ],
+        spacing=9,
+    )
+
+
+def build_tracking_view(
+    order,
+    progress_index,
+    on_back,
+    on_advance,
+    on_deliver,
+    layout_mode="wide",
+):
+    progress_index = min(max(0, progress_index), len(ROUTE_COORDINATES) - 1)
+    delivered = order.estado_afnd == "q6"
+    at_destination = progress_index == len(ROUTE_COORDINATES) - 1
+    remaining_steps = len(ROUTE_COORDINATES) - 1 - progress_index
+    eta = "Entregado" if delivered else "Llegando" if at_destination else f"{remaining_steps * 4} min aprox."
+
+    route_points = [_point(*coordinates) for coordinates in ROUTE_COORDINATES]
+    markers = [
+        _marker(ROUTE_COORDINATES[0], ft.Icons.WAREHOUSE_ROUNDED, SECONDARY, "Origen simulado"),
+        _marker(ROUTE_COORDINATES[-1], ft.Icons.FLAG_ROUNDED, SUCCESS, "Destino simulado"),
+        _marker(
+            ROUTE_COORDINATES[progress_index],
+            ft.Icons.LOCAL_SHIPPING_ROUNDED,
+            SUCCESS if delivered else PRIMARY,
+            "Vehículo simulado",
+        ),
+    ]
+
+    tracking_map = fmap.Map(
+        initial_center=_point(14.8365, -91.5223),
+        initial_zoom=15,
+        min_zoom=3,
+        max_zoom=19,
+        interaction_configuration=fmap.MapInteractionConfiguration(flags=fmap.MapInteractiveFlag.ALL),
+        layers=[
+            fmap.TileLayer(url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+            fmap.PolylineLayer(
+                polylines=[
+                    fmap.PolylineMarker(
+                        coordinates=route_points,
+                        color=PRIMARY,
+                        border_color="#083344",
+                        stroke_width=6,
+                        border_stroke_width=2,
+                    )
+                ]
+            ),
+            fmap.MarkerLayer(markers=markers),
+            fmap.RichAttribution(
+                attributions=[
+                    fmap.TextSourceAttribution(
+                        text="OpenStreetMap contributors",
+                        prepend_copyright=True,
+                    )
+                ]
+            ),
+        ],
+        expand=True,
+    )
+
+    map_panel = ft.Container(
+        col={"xs": 12, "lg": 8},
+        bgcolor=SURFACE_ELEVATED,
+        border=ft.border.all(1, BORDER),
+        border_radius=18,
+        padding=12,
+        content=ft.Column(
+            controls=[
+                ft.Container(
+                    height=520 if layout_mode == "wide" else 380,
+                    border_radius=14,
+                    clip_behavior=ft.ClipBehavior.HARD_EDGE,
+                    content=tracking_map,
+                ),
+                ft.Row(
+                    controls=[
+                        ft.Icon(ft.Icons.PUBLIC_ROUNDED, size=14, color=TEXT_SECONDARY),
+                        ft.Text("© OpenStreetMap contributors", size=10, color=TEXT_SECONDARY),
+                        ft.Container(expand=True),
+                        ft.Text("Ruta de demostración · Quetzaltenango", size=10, color=TEXT_SECONDARY),
+                    ],
+                    wrap=True,
+                ),
+            ],
+            spacing=8,
+        ),
+    )
+
+    information_panel = ft.Container(
+        col={"xs": 12, "lg": 4},
+        bgcolor=SURFACE_ELEVATED,
+        border=ft.border.all(1, BORDER),
+        border_radius=18,
+        padding=20,
+        content=ft.Column(
+            controls=[
+                ft.Text("SIMULACIÓN DE SEGUIMIENTO", size=10, color=PRIMARY, weight=ft.FontWeight.BOLD),
+                ft.Text(f"Pedido #{order.id_pedido}", size=21, color=TEXT_PRIMARY, weight=ft.FontWeight.BOLD),
+                ft.Text(order.producto, size=13, color=TEXT_SECONDARY),
+                ft.Container(
+                    bgcolor=SURFACE,
+                    border_radius=13,
+                    padding=14,
+                    content=ft.Row(
+                        controls=[
+                            ft.Icon(
+                                ft.Icons.CHECK_CIRCLE_ROUNDED if delivered else ft.Icons.LOCAL_SHIPPING_ROUNDED,
+                                color=SUCCESS if delivered else PRIMARY,
+                            ),
+                            ft.Column(
+                                controls=[
+                                    ft.Text(
+                                        "Entregado" if delivered else "En ruta",
+                                        size=15,
+                                        color=SUCCESS if delivered else PRIMARY,
+                                        weight=ft.FontWeight.BOLD,
+                                    ),
+                                    ft.Text(f"ETA simulada: {eta}", size=11, color=TEXT_SECONDARY),
+                                ],
+                                spacing=2,
+                            ),
+                        ],
+                        spacing=10,
+                    ),
+                ),
+                ft.Text("Progreso", size=12, color=TEXT_PRIMARY, weight=ft.FontWeight.W_600),
+                ft.ProgressBar(
+                    value=1 if delivered else progress_index / (len(ROUTE_COORDINATES) - 1),
+                    color=SUCCESS if delivered else PRIMARY,
+                    bgcolor=BORDER,
+                ),
+                ft.Column(
+                    controls=[
+                        _timeline_item("Pedido confirmado", "done"),
+                        _timeline_item("Preparando envío", "done"),
+                        _timeline_item("En ruta", "done" if delivered else "active"),
+                        _timeline_item("Entregado", "done" if delivered else "active" if at_destination else "pending"),
+                    ],
+                    spacing=9,
+                ),
+                ft.Divider(color=BORDER, height=16),
+                ft.FilledButton(
+                    "Simular avance",
+                    icon=ft.Icons.NAVIGATION_ROUNDED,
+                    width=float("inf"),
+                    disabled=delivered or at_destination,
+                    on_click=lambda _: on_advance(),
+                    style=ft.ButtonStyle(bgcolor=PRIMARY, color="#031018"),
+                ),
+                ft.FilledButton(
+                    "Confirmar entrega",
+                    icon=ft.Icons.INVENTORY_ROUNDED,
+                    width=float("inf"),
+                    visible=not delivered,
+                    disabled=not at_destination,
+                    on_click=lambda _: on_deliver(),
+                    style=ft.ButtonStyle(bgcolor=SUCCESS, color="#031018"),
+                ),
+            ],
+            spacing=12,
+        ),
+    )
+
+    return ft.Column(
+        controls=[
+            ft.TextButton(
+                "Volver a Pedidos",
+                icon=ft.Icons.ARROW_BACK_ROUNDED,
+                on_click=lambda _: on_back(),
+            ),
+            ft.Text("Rastrear pedido", size=30, color=TEXT_PRIMARY, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                "Simulación de seguimiento: no representa una ubicación GPS en tiempo real.",
+                size=11,
+                color=TEXT_SECONDARY,
+            ),
+            ft.ResponsiveRow(
+                controls=[map_panel, information_panel],
+                spacing=14,
+                run_spacing=14,
+            ),
+        ],
+        spacing=10,
+        scroll=ft.ScrollMode.AUTO,
+        expand=True,
+    )
