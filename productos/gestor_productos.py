@@ -51,7 +51,8 @@ def obtener_productos():
                 "nombre": producto["title"],
                 "precio": producto["price"],
                 "categoria": categoria,
-                "existencia": producto["stock"]
+                "existencia": producto["stock"],
+                "thumbnail": producto["thumbnail"]
             })
 
         return productos
