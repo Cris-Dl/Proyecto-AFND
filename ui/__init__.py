@@ -1,0 +1,1 @@
+"""Interfaz visual de GamerGear."""
