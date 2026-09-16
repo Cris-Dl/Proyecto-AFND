@@ -1,6 +1,6 @@
 import flet as ft
 
-from ui.theme import BORDER, PRIMARY, SUCCESS, SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_SECONDARY
+from ui.theme import BORDER, PRIMARY, SECONDARY, SUCCESS, SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_SECONDARY
 
 
 def _product_image(producto, compact):
@@ -15,7 +15,13 @@ def _product_image(producto, compact):
     return ft.Container(
         height=100 if compact else 126,
         alignment=ft.alignment.center,
-        content=ft.Icon(ft.Icons.IMAGE_NOT_SUPPORTED_OUTLINED, size=42, color=TEXT_SECONDARY),
+        content=ft.Icon(
+            ft.Icons.ALT_ROUTE_ROUNDED
+            if producto.get("demo_afnd")
+            else ft.Icons.IMAGE_NOT_SUPPORTED_OUTLINED,
+            size=42,
+            color=SECONDARY if producto.get("demo_afnd") else TEXT_SECONDARY,
+        ),
     )
 
 
@@ -43,11 +49,24 @@ def build_product_card(producto, on_view=None, compact=False):
                     alignment=ft.alignment.center,
                     padding=7,
                 ),
-                ft.Text(
-                    producto["categoria"],
-                    size=11,
-                    color=PRIMARY,
-                    weight=ft.FontWeight.W_600,
+                ft.Row(
+                    controls=[
+                        ft.Text(
+                            producto["categoria"],
+                            size=11,
+                            color=PRIMARY,
+                            weight=ft.FontWeight.W_600,
+                        ),
+                        ft.Container(expand=True),
+                        ft.Container(
+                            visible=bool(producto.get("demo_afnd")),
+                            bgcolor="#241B46",
+                            border=ft.border.all(1, SECONDARY),
+                            border_radius=9,
+                            padding=ft.padding.symmetric(horizontal=7, vertical=2),
+                            content=ft.Text("Demo AFND", size=8, color=SECONDARY),
+                        ),
+                    ],
                 ),
                 ft.Container(
                     height=42,
@@ -70,7 +89,11 @@ def build_product_card(producto, on_view=None, compact=False):
                         ),
                         ft.Container(expand=True),
                         ft.Text(
-                            f"{producto['existencia']} disponibles",
+                            (
+                                f"{producto['existencia']} disponibles"
+                                if producto["existencia"] > 0
+                                else "Sin disponibilidad local"
+                            ),
                             size=11,
                             color=SUCCESS if producto["existencia"] > 0 else TEXT_SECONDARY,
                         ),

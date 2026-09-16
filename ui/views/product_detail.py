@@ -76,13 +76,14 @@ def build_product_detail_view(
 
     stock_available = stock > 0
     stock_color = SUCCESS if stock_available else WARNING
-    stock_label = f"{stock} unidades disponibles" if stock_available else "Sin existencias"
+    stock_label = f"{stock} unidades disponibles" if stock_available else "Sin disponibilidad local"
 
     purchase_button = ft.FilledButton(
         "Comprar ahora",
         icon=ft.Icons.SHOPPING_BAG_ROUNDED,
         width=float("inf"),
         disabled=not stock_available,
+        visible=stock_available,
         on_click=lambda _: on_buy(selected_quantity),
         style=ft.ButtonStyle(
             bgcolor=PRIMARY,
@@ -101,6 +102,14 @@ def build_product_detail_view(
 
     details = ft.Column(
         controls=[
+            ft.Container(
+                visible=bool(producto.get("demo_afnd")),
+                bgcolor="#241B46",
+                border=ft.border.all(1, SECONDARY),
+                border_radius=10,
+                padding=ft.padding.symmetric(horizontal=9, vertical=4),
+                content=ft.Text("Demo AFND", size=9, color=SECONDARY, weight=ft.FontWeight.BOLD),
+            ),
             ft.Text(
                 producto["categoria"],
                 size=11,
@@ -125,6 +134,12 @@ def build_product_detail_view(
                     ft.Text(stock_label, color=stock_color, size=13),
                 ],
                 spacing=8,
+            ),
+            ft.Text(
+                "Producto local de demostración; no representa inventario real.",
+                size=10,
+                color=TEXT_SECONDARY,
+                visible=bool(producto.get("demo_afnd")),
             ),
             ft.Divider(color=BORDER, height=22),
             ft.Text("Cantidad", size=12, color=TEXT_SECONDARY, weight=ft.FontWeight.W_600),

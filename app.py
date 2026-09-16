@@ -4,6 +4,7 @@ import flet as ft
 
 from automata.integration import GamerGearAutomataIntegration
 from productos.gestor_productos import obtener_productos
+from services.alternative_availability import get_demo_products
 from services.orders_service import OrdersService
 from services.routing_service import RoutingService
 from ui.components import build_sidebar, build_top_bar
@@ -33,6 +34,7 @@ class GamerGearApp:
         self.current_route = "inicio"
         self.usuario_autenticado = None
         self.productos = []
+        self.demo_products = get_demo_products()
         self.products_loading = True
         self.products_error = None
         self.search_query = ""
@@ -126,6 +128,7 @@ class GamerGearApp:
                 on_view=self.open_product,
                 initial_query=self.search_query,
                 columns=self.cards_per_row(),
+                demo_products=self.demo_products,
             )
 
         if self.current_route == "detalle" and self.selected_product:
