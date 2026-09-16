@@ -2,6 +2,7 @@ import asyncio
 
 import flet as ft
 
+from automata.integration import GamerGearAutomataIntegration
 from productos.gestor_productos import obtener_productos
 from ui.components import build_sidebar, build_top_bar
 from ui.theme import BACKGROUND, SUCCESS, configure_page
@@ -35,6 +36,7 @@ class GamerGearApp:
         self.layout_mode = self.get_layout_mode(page.width or WIDE_BREAKPOINT)
         self.compact_navigation = self.layout_mode != "wide"
         self.secondary_navigation = []
+        self.afnd_integration = GamerGearAutomataIntegration()
 
         configure_page(page)
         page.on_resized = self.handle_resize
@@ -113,6 +115,7 @@ class GamerGearApp:
                 quantity=self.selected_quantity,
                 on_quantity_change=self.update_selected_quantity,
                 on_buy=self.begin_purchase,
+                on_search_alternatives=self.search_alternatives,
                 on_back=lambda: self.navigate("productos"),
                 layout_mode=self.layout_mode,
             )
@@ -149,6 +152,7 @@ class GamerGearApp:
             return build_login_view(
                 self.page,
                 on_auth_success=self.handle_auth_success,
+                on_registration_success=self.handle_registration_success,
                 on_back=self.return_from_login,
             )
 
@@ -198,7 +202,11 @@ class GamerGearApp:
 
     def handle_auth_success(self, usuario):
         self.usuario_autenticado = usuario
+        self.afnd_integration.login_succeeded()
         self.return_from_login()
+
+    def handle_registration_success(self, _usuario):
+        self.afnd_integration.account_created()
 
     def return_from_login(self):
         destination = self.route_before_login
@@ -220,8 +228,23 @@ class GamerGearApp:
             self.current_route = "login"
             self.render()
             return
+        self.afnd_integration.start_purchase()
         self.current_route = "revisar_pedido"
         self.render()
+
+    def search_alternatives(self):
+        if not self.usuario_autenticado:
+            self.route_before_login = "detalle"
+            self.current_route = "login"
+            self.render()
+            return
+        self.afnd_integration.search_alternatives()
+        self.page.open(
+            ft.SnackBar(
+                ft.Text("Búsqueda de alternativas iniciada."),
+                bgcolor=SUCCESS,
+            )
+        )
 
     def return_to_product(self):
         if self.selected_product:
@@ -231,6 +254,7 @@ class GamerGearApp:
         self.navigate("productos")
 
     def continue_order(self):
+        self.afnd_integration.confirm_order()
         self.page.open(
             ft.SnackBar(
                 ft.Text("El pedido está listo para ser procesado."),

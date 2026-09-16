@@ -11,6 +11,8 @@ from .afnd import (
     AFNDResult,
     TransitionStep,
 )
+from .integration import GamerGearAutomataIntegration
+from .session import AutomataSession, RealFlowSnapshot, StoreEvent
 
 __all__ = [
     "ACCEPTING_STATE",
@@ -22,4 +24,8 @@ __all__ = [
     "AFND",
     "AFNDResult",
     "TransitionStep",
+    "AutomataSession",
+    "GamerGearAutomataIntegration",
+    "RealFlowSnapshot",
+    "StoreEvent",
 ]

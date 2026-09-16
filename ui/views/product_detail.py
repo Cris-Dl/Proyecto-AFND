@@ -25,6 +25,7 @@ def build_product_detail_view(
     quantity,
     on_quantity_change,
     on_buy,
+    on_search_alternatives,
     on_back,
     layout_mode="wide",
 ):
@@ -89,6 +90,14 @@ def build_product_detail_view(
             padding=ft.padding.symmetric(horizontal=24, vertical=16),
         ),
     )
+    alternative_button = ft.OutlinedButton(
+        "Buscar alternativas",
+        icon=ft.Icons.TRAVEL_EXPLORE_ROUNDED,
+        width=float("inf"),
+        visible=not stock_available,
+        on_click=lambda _: on_search_alternatives(),
+        style=ft.ButtonStyle(color=SECONDARY, side=ft.BorderSide(1, SECONDARY)),
+    )
 
     details = ft.Column(
         controls=[
@@ -132,6 +141,7 @@ def build_product_detail_view(
             ),
             ft.Container(height=4),
             ft.Container(width=float("inf"), content=purchase_button),
+            ft.Container(width=float("inf"), content=alternative_button, visible=not stock_available),
         ],
         spacing=12,
     )

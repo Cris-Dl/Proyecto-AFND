@@ -33,12 +33,16 @@ def _text_field(label, icon, password=False):
 class GamerGearLoginView(VistaLogin):
     """Presentación GamerGear que reutiliza la lógica original de VistaLogin."""
 
-    def __init__(self, page, on_auth_success=None):
+    def __init__(self, page, on_auth_success=None, on_registration_success=None):
         self.active_view = "menu"
         self.face_status_text = None
         self.face_status_icon = None
         self.scroll_host = None
-        super().__init__(page, on_auth_success=on_auth_success)
+        super().__init__(
+            page,
+            on_auth_success=on_auth_success,
+            on_registration_success=on_registration_success,
+        )
 
     def actualizar_pantalla(self):
         try:
@@ -365,8 +369,12 @@ class GamerGearLoginView(VistaLogin):
         )
 
 
-def build_login_view(page, on_auth_success, on_back):
-    auth_view = GamerGearLoginView(page, on_auth_success=on_auth_success)
+def build_login_view(page, on_auth_success, on_registration_success, on_back):
+    auth_view = GamerGearLoginView(
+        page,
+        on_auth_success=on_auth_success,
+        on_registration_success=on_registration_success,
+    )
     login_view = ft.Column(
         controls=[
             ft.TextButton(

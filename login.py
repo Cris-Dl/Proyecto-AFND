@@ -243,10 +243,11 @@ def iniciar_sesion_camara(rostros_registrados):
     return usuario_encontrado
 
 class VistaLogin(ft.Column):
-    def __init__(self, page: ft.Page, on_auth_success=None):
+    def __init__(self, page: ft.Page, on_auth_success=None, on_registration_success=None):
         super().__init__()
         self.main_page = page
         self.on_auth_success = on_auth_success
+        self.on_registration_success = on_registration_success
         self.usuario_autenticado = None
         self.horizontal_alignment = ft.CrossAxisAlignment.CENTER
         self.construir_menu_principal()
@@ -255,6 +256,10 @@ class VistaLogin(ft.Column):
         self.usuario_autenticado = usuario
         if self.on_auth_success:
             self.on_auth_success(usuario)
+
+    def notificar_registro(self, usuario):
+        if self.on_registration_success:
+            self.on_registration_success(usuario)
 
     def mostrar_mensaje(self, texto, color):
         self.main_page.open(ft.SnackBar(ft.Text(texto), bgcolor=color))
@@ -478,6 +483,7 @@ class VistaLogin(ft.Column):
             conexion.close()
 
             self.mostrar_mensaje("Confirmación: ¡Cuenta creada y guardada exitosamente!", ft.Colors.GREEN)
+            self.notificar_registro(usr)
             self.construir_menu_principal()
 
         except sqlite3.IntegrityError:
