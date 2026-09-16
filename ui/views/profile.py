@@ -3,7 +3,7 @@ import flet as ft
 from ui.theme import BORDER, PRIMARY, SURFACE, SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_SECONDARY
 
 
-def build_profile_view(usuario, on_login, on_logout):
+def build_profile_view(usuario, on_login, on_logout, on_open_afnd):
     authenticated = bool(usuario)
     action = (
         ft.OutlinedButton(
@@ -21,16 +21,13 @@ def build_profile_view(usuario, on_login, on_logout):
         )
     )
 
-    return ft.Container(
-        expand=True,
-        alignment=ft.alignment.center,
-        content=ft.Container(
-            width=560,
-            bgcolor=SURFACE_ELEVATED,
-            border=ft.border.all(1, BORDER),
-            border_radius=22,
-            padding=ft.padding.symmetric(horizontal=28, vertical=30),
-            content=ft.Column(
+    profile_card = ft.Container(
+        width=560,
+        bgcolor=SURFACE_ELEVATED,
+        border=ft.border.all(1, BORDER),
+        border_radius=22,
+        padding=ft.padding.symmetric(horizontal=28, vertical=30),
+        content=ft.Column(
                 controls=[
                     ft.Container(
                         width=82,
@@ -72,6 +69,39 @@ def build_profile_view(usuario, on_login, on_logout):
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=10,
                 tight=True,
-            ),
         ),
+    )
+
+    tools_card = ft.Container(
+        width=560,
+        bgcolor=SURFACE_ELEVATED,
+        border=ft.border.all(1, BORDER),
+        border_radius=18,
+        padding=20,
+        content=ft.Column(
+            controls=[
+                ft.Text("Herramientas", size=11, color=PRIMARY, weight=ft.FontWeight.BOLD),
+                ft.Text("Visualizador AFND", size=19, color=TEXT_PRIMARY, weight=ft.FontWeight.W_600),
+                ft.Text(
+                    "Consulta el flujo formal generado por la tienda o procesa una cadena manual.",
+                    size=12,
+                    color=TEXT_SECONDARY,
+                ),
+                ft.OutlinedButton(
+                    "Abrir visualizador",
+                    icon=ft.Icons.ACCOUNT_TREE_ROUNDED,
+                    on_click=lambda _: on_open_afnd(),
+                    style=ft.ButtonStyle(color=PRIMARY, side=ft.BorderSide(1, BORDER)),
+                ),
+            ],
+            spacing=8,
+        ),
+    )
+
+    return ft.Column(
+        controls=[profile_card, tools_card],
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        spacing=14,
+        scroll=ft.ScrollMode.AUTO,
+        expand=True,
     )

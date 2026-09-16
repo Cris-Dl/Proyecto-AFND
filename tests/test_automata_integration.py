@@ -1,5 +1,6 @@
 import unittest
 
+from automata.afnd import AFND
 from automata.integration import GamerGearAutomataIntegration
 
 
@@ -37,6 +38,16 @@ class AutomataIntegrationTests(unittest.TestCase):
         result = self.integration.start_purchase()
         self.assertEqual(self.integration.snapshot().chain, "I-P")
         self.assertEqual(result.active_states, frozenset({"q3"}))
+
+    def test_manual_machine_does_not_overwrite_real_flow(self):
+        self.integration.start_purchase()
+        original = self.integration.snapshot()
+
+        manual_machine = AFND()
+        manual_result = manual_machine.process_string("I-P-D")
+
+        self.assertEqual(manual_result.active_states, frozenset({"q7", "q8", "q9"}))
+        self.assertEqual(self.integration.snapshot(), original)
 
 
 if __name__ == "__main__":

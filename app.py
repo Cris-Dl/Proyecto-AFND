@@ -7,6 +7,7 @@ from productos.gestor_productos import obtener_productos
 from ui.components import build_sidebar, build_top_bar
 from ui.theme import BACKGROUND, SUCCESS, configure_page
 from ui.views import (
+    build_afnd_visualizer,
     build_home_view,
     build_login_view,
     build_order_review_view,
@@ -71,6 +72,8 @@ class GamerGearApp:
         return {"narrow": 1, "medium": 2, "wide": 3}[self.layout_mode]
 
     def selected_navigation_route(self):
+        if self.current_route == "afnd":
+            return "perfil"
         if self.current_route in {"detalle", "revisar_pedido"}:
             return "productos"
         return self.current_route
@@ -146,6 +149,14 @@ class GamerGearApp:
                 usuario=self.usuario_autenticado,
                 on_login=self.open_account,
                 on_logout=self.logout,
+                on_open_afnd=lambda: self.navigate("afnd"),
+            )
+
+        if self.current_route == "afnd":
+            return build_afnd_visualizer(
+                session=self.afnd_integration.session,
+                on_back=lambda: self.navigate("perfil"),
+                layout_mode=self.layout_mode,
             )
 
         if self.current_route == "login":
