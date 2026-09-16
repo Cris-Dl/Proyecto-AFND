@@ -30,5 +30,21 @@ class GamerGearAutomataIntegration:
     def confirm_order(self):
         return self.session.record("G", "Pedido confirmado para la etapa previa al rastreo")
 
+    def start_tracking(self):
+        return self.session.record("R", "Pedido persistido e incorporado al rastreo")
+
+    def resume_tracking(self):
+        self.session.start_flow("Rastreo de pedido persistido")
+        self.session.record("I", "Sesión autenticada existente")
+        self.session.record("P", "Pedido persistido seleccionado")
+        self.session.record("G", "Pedido confirmado previamente")
+        return self.session.record("R", "Pedido recuperado en rastreo")
+
+    def tracking_update(self):
+        return self.session.record("R", "Actualización simulada de rastreo")
+
+    def delivery_completed(self):
+        return self.session.record("E", "Entrega persistente confirmada")
+
     def snapshot(self):
         return self.session.snapshot()

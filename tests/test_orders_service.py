@@ -63,6 +63,16 @@ class OrdersServiceTests(unittest.TestCase):
 
         self.assertEqual(restarted_service.get_order_by_id(created.id_pedido), created)
 
+    def test_existing_finalize_sale_persists_q6(self):
+        created = self.service.create_order(self.products, "ana", 7, 1).order
+
+        success, _message, delivered = self.service.finish_order(created.id_pedido)
+
+        self.assertTrue(success)
+        self.assertEqual(delivered.estado_afnd, "q6")
+        restarted_service = OrdersService(db_path=self.db_path, initialize=False)
+        self.assertEqual(restarted_service.get_order_by_id(created.id_pedido).estado_afnd, "q6")
+
     def test_database_uses_only_existing_columns(self):
         with closing(sqlite3.connect(self.db_path)) as connection:
             columns = [row[1] for row in connection.execute("PRAGMA table_info(pedidos)")]

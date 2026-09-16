@@ -298,10 +298,11 @@ class GamerGearApp:
             product_id=self.selected_product["id"],
             quantity=self.selected_quantity,
         )
-        if not result.success:
+        if not result.success or not result.order or result.order.estado_afnd != "q5":
             self.page.open(ft.SnackBar(ft.Text(result.message), bgcolor=ERROR))
             return
 
+        self.afnd_integration.start_tracking()
         self.current_route = "pedidos"
         self.selected_product = None
         self.selected_quantity = 1
@@ -321,6 +322,8 @@ class GamerGearApp:
         if not order or order.estado_afnd != "q5":
             self.page.open(ft.SnackBar(ft.Text("Este pedido no está disponible para rastreo."), bgcolor=ERROR))
             return
+        if self.afnd_integration.snapshot().result.active_states != frozenset({"q5"}):
+            self.afnd_integration.resume_tracking()
         self.selected_order_id = order.id_pedido
         self.tracking_progress.setdefault(order.id_pedido, 0)
         self.current_route = "tracking"
@@ -335,16 +338,33 @@ class GamerGearApp:
             return
         last_index = len(ROUTE_COORDINATES) - 1
         current = self.tracking_progress.get(order.id_pedido, 0)
+        if current >= last_index:
+            return
         self.tracking_progress[order.id_pedido] = min(current + 1, last_index)
+        self.afnd_integration.tracking_update()
         self.render()
 
     def deliver_order(self):
-        self.page.open(
-            ft.SnackBar(
-                ft.Text("La confirmación persistente se conectará en el siguiente bloque."),
-                bgcolor=SUCCESS,
-            )
+        order = self.orders_service.get_order_by_id(
+            self.selected_order_id,
+            username=self.usuario_autenticado,
         )
+        last_index = len(ROUTE_COORDINATES) - 1
+        if (
+            not order
+            or order.estado_afnd != "q5"
+            or self.tracking_progress.get(order.id_pedido, 0) < last_index
+        ):
+            return
+
+        success, message, updated_order = self.orders_service.finish_order(order.id_pedido)
+        if not success or not updated_order or updated_order.estado_afnd != "q6":
+            self.page.open(ft.SnackBar(ft.Text(message), bgcolor=ERROR))
+            return
+
+        self.afnd_integration.delivery_completed()
+        self.render()
+        self.page.open(ft.SnackBar(ft.Text("Pedido entregado correctamente."), bgcolor=SUCCESS))
 
     def logout(self):
         self.usuario_autenticado = None

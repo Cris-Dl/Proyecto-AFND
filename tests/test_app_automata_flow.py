@@ -32,6 +32,30 @@ class FakeOrdersService:
             return None
         return self.order
 
+    def finish_order(self, order_id):
+        if self.order.id_pedido != order_id or self.order.estado_afnd != "q5":
+            return False, "No se pudo finalizar.", None
+        self.order = OrderRecord(
+            self.order.id_pedido,
+            self.order.usuario,
+            self.order.producto,
+            self.order.cantidad,
+            self.order.precio,
+            self.order.total,
+            "q6",
+        )
+        return True, "Entregado.", self.order
+
+
+class FailingCreateOrdersService(FakeOrdersService):
+    def create_order(self, products, username, product_id, quantity):
+        return OrderCreationResult(success=False, message="Creación rechazada.")
+
+
+class FailingDeliveryOrdersService(FakeOrdersService):
+    def finish_order(self, order_id):
+        return False, "Entrega rechazada.", None
+
 
 class AppAutomataFlowTests(unittest.TestCase):
     def setUp(self):
@@ -49,7 +73,7 @@ class AppAutomataFlowTests(unittest.TestCase):
         self.application.tracking_progress = {}
         self.application.render = lambda *args, **kwargs: None
 
-    def test_authenticated_purchase_and_confirmation_emit_i_p_g(self):
+    def test_authenticated_purchase_and_confirmation_emit_i_p_g_r(self):
         self.application.begin_purchase(2)
         snapshot = self.application.afnd_integration.snapshot()
         self.assertEqual(snapshot.chain, "I-P")
@@ -57,8 +81,8 @@ class AppAutomataFlowTests(unittest.TestCase):
 
         self.application.confirm_real_order()
         snapshot = self.application.afnd_integration.snapshot()
-        self.assertEqual(snapshot.chain, "I-P-G")
-        self.assertEqual(snapshot.result.active_states, frozenset({"q4"}))
+        self.assertEqual(snapshot.chain, "I-P-G-R")
+        self.assertEqual(snapshot.result.active_states, frozenset({"q5"}))
 
     def test_purchase_after_login_restarts_without_duplicate_i(self):
         self.application.usuario_autenticado = None
@@ -71,7 +95,7 @@ class AppAutomataFlowTests(unittest.TestCase):
         self.application.begin_purchase(2)
         self.application.confirm_real_order()
 
-        self.assertEqual(self.application.afnd_integration.snapshot().chain, "I-P-G")
+        self.assertEqual(self.application.afnd_integration.snapshot().chain, "I-P-G-R")
 
     def test_searching_alternatives_emits_i_p_d(self):
         self.application.search_alternatives()
@@ -90,6 +114,46 @@ class AppAutomataFlowTests(unittest.TestCase):
 
         self.assertEqual(self.application.current_route, "tracking")
         self.assertEqual(self.application.tracking_progress[1], 2)
+        self.assertEqual(self.application.orders_service.order.estado_afnd, "q5")
+        self.assertEqual(self.application.afnd_integration.snapshot().chain, "I-P-G-R-R-R")
+        self.assertEqual(
+            self.application.afnd_integration.snapshot().result.active_states,
+            frozenset({"q5"}),
+        )
+
+    def test_delivery_persists_q6_before_emitting_e(self):
+        self.application.open_tracking(1)
+        for _ in range(2):
+            self.application.advance_tracking()
+
+        self.application.deliver_order()
+
+        snapshot = self.application.afnd_integration.snapshot()
+        self.assertEqual(self.application.orders_service.order.estado_afnd, "q6")
+        self.assertTrue(snapshot.chain.endswith("E"))
+        self.assertEqual(snapshot.result.active_states, frozenset({"q6"}))
+        self.assertTrue(snapshot.result.accepted)
+
+    def test_failed_creation_does_not_emit_r(self):
+        self.application.orders_service = FailingCreateOrdersService()
+        self.application.begin_purchase(1)
+
+        self.application.confirm_real_order()
+
+        snapshot = self.application.afnd_integration.snapshot()
+        self.assertEqual(snapshot.chain, "I-P-G")
+        self.assertEqual(snapshot.result.active_states, frozenset({"q4"}))
+
+    def test_failed_finalize_sale_does_not_emit_e(self):
+        self.application.orders_service = FailingDeliveryOrdersService()
+        self.application.open_tracking(1)
+        self.application.tracking_progress[1] = 2
+
+        self.application.deliver_order()
+
+        snapshot = self.application.afnd_integration.snapshot()
+        self.assertEqual(snapshot.chain, "I-P-G-R")
+        self.assertEqual(snapshot.result.active_states, frozenset({"q5"}))
         self.assertEqual(self.application.orders_service.order.estado_afnd, "q5")
 
 
