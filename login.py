@@ -172,9 +172,7 @@ class VistaLogin(ft.Column):
             self.on_auth_success(usuario)
 
     def mostrar_mensaje(self, texto, color):
-        self.main_page.snack_bar = ft.SnackBar(ft.Text(texto), bgcolor=color)
-        self.main_page.snack_bar.open = True
-        self.main_page.update()
+        self.main_page.open(ft.SnackBar(ft.Text(texto), bgcolor=color))
 
     def limpiar_vista(self):
         self.controls.clear()
@@ -182,7 +180,7 @@ class VistaLogin(ft.Column):
     def actualizar_pantalla(self):
         try:
             self.update()
-        except RuntimeError:
+        except (AssertionError, RuntimeError):
             pass
 
     # --- 0. MENÚ PRINCIPAL ---
@@ -435,10 +433,10 @@ def main(page: ft.Page):
     page.title = "GamerGear - Módulo de Login"
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
-    page.window_width = 450
-    page.window_height = 680
+    page.window.width = 450
+    page.window.height = 680
     page.add(VistaLogin(page))
 
 
 if __name__ == "__main__":
-    ft.run(main)
+    ft.app(target=main)
