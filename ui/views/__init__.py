@@ -1,6 +1,7 @@
 """Vistas principales de GamerGear."""
 
 from .afnd_visualizer import build_afnd_visualizer
+from .alternatives import build_alternatives_view
 from .delivery_location import build_delivery_location_view
 from .home import build_home_view
 from .login_view import build_login_view
@@ -14,6 +15,7 @@ from .tracking import build_tracking_view
 
 __all__ = [
     "build_afnd_visualizer",
+    "build_alternatives_view",
     "build_delivery_location_view",
     "build_home_view",
     "build_login_view",

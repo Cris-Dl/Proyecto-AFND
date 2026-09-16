@@ -27,6 +27,20 @@ class GamerGearAutomataIntegration:
         self.session.record("P", "Producto seleccionado para compra")
         return self.session.record("D", "Producto sin disponibilidad")
 
+    def select_alternative(self, symbol):
+        descriptions = {
+            "S": "Disponibilidad simulada encontrada en otra sucursal",
+            "B": "Disponibilidad simulada encontrada en bodega",
+            "V": "Disponibilidad simulada encontrada con proveedor",
+        }
+        normalized = str(symbol).upper()
+        if normalized not in descriptions:
+            raise ValueError("La fuente alternativa debe ser S, B o V.")
+        return self.session.record(normalized, descriptions[normalized])
+
+    def cancel_alternatives(self):
+        return self.session.record("X", "Sin disponibilidad en las opciones simuladas")
+
     def confirm_order(self):
         return self.session.record("G", "Pedido confirmado para la etapa previa al rastreo")
 
