@@ -1,0 +1,6 @@
+.venv/
+.codex-flet-auth/
+__pycache__/
+*.pyc
+*.pyo
+gamergear.db
