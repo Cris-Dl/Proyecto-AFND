@@ -71,6 +71,8 @@ def _result_label(result):
         return "Cadena vacía", TEXT_SECONDARY
     if result.accepted:
         return "Aceptada", SUCCESS
+    if result.active_states == frozenset({REJECTING_STATE}):
+        return "Rechazada", ERROR
     return "No aceptada", WARNING
 
 

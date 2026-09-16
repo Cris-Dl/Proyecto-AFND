@@ -47,6 +47,28 @@ class AutomataIntegrationTests(unittest.TestCase):
         self.assertEqual(result.active_states, frozenset({"q10"}))
         self.assertEqual(self.integration.snapshot().chain, "I-P-D-X")
 
+    def test_tracking_cancellation_reaches_q10(self):
+        self.integration.start_purchase()
+        self.integration.confirm_order()
+        self.integration.start_tracking()
+        result = self.integration.tracking_cancelled()
+        self.assertEqual(self.integration.snapshot().chain, "I-P-G-R-X")
+        self.assertEqual(result.active_states, frozenset({"q10"}))
+
+    def test_each_alternative_tracking_cancellation_reaches_q10(self):
+        for symbol in ("S", "B", "V"):
+            with self.subTest(symbol=symbol):
+                self.integration.search_alternatives()
+                self.integration.select_alternative(symbol)
+                self.integration.confirm_order()
+                self.integration.start_tracking()
+                result = self.integration.tracking_cancelled()
+                self.assertEqual(
+                    self.integration.snapshot().chain,
+                    f"I-P-D-{symbol}-G-R-X",
+                )
+                self.assertEqual(result.active_states, frozenset({"q10"}))
+
     def test_new_purchase_does_not_depend_on_previous_flow(self):
         self.integration.search_alternatives()
         result = self.integration.start_purchase()

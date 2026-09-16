@@ -2,7 +2,13 @@ import unittest
 
 from automata.afnd import AFND
 from ui.theme import ERROR, PRIMARY, SECONDARY, SUCCESS
-from ui.views.afnd_visualizer import STATE_LABELS, _active_state_chips, _state_node
+from ui.views.afnd_visualizer import (
+    STATE_LABELS,
+    TRANSITION_LABELS,
+    _active_state_chips,
+    _result_label,
+    _state_node,
+)
 
 
 def chip_labels(active_states):
@@ -63,6 +69,13 @@ class AFNDVisualizerTests(unittest.TestCase):
                 self.assertEqual(badge.content.value, label)
                 self.assertEqual(badge.content.color, color)
                 self.assertEqual(chip_labels({state}), [f"{state} {STATE_LABELS[state]}"])
+
+    def test_manual_tracking_cancellation_is_visible_as_rejection(self):
+        result = AFND().process_string("I-P-G-R-X")
+        self.assertEqual(result.active_states, frozenset({"q10"}))
+        self.assertTrue(result.rejected)
+        self.assertEqual(_result_label(result), ("Rechazada", ERROR))
+        self.assertTrue(any("q5 —X→ q10" in label for label in TRANSITION_LABELS))
 
 
 if __name__ == "__main__":

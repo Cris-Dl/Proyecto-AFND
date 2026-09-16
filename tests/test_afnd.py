@@ -46,6 +46,24 @@ class AFNDTests(unittest.TestCase):
         self.assertTrue(result.accepted)
         self.assertEqual(result.active_states, frozenset({"q6"}))
 
+    def test_tracking_cancellation_chains_reach_q10(self):
+        chains = (
+            "I-P-G-R-X",
+            "I-P-G-R-R-R-X",
+            "I-P-D-B-G-R-X",
+            "I-P-D-X",
+        )
+        for chain in chains:
+            with self.subTest(chain=chain):
+                result = self.afnd.process_string(chain)
+                self.assertEqual(result.active_states, frozenset({"q10"}))
+                self.assertTrue(result.rejected)
+
+    def test_delivered_order_has_no_x_transition(self):
+        result = self.afnd.process_string("I-P-G-R-E-X")
+        self.assertEqual(result.active_states, frozenset())
+        self.assertTrue(result.rejected)
+
     def test_invalid_symbol_is_reported(self):
         result = self.afnd.process_string("I-P-D-Z-G-R-E")
         self.assertEqual(result.invalid_symbol, "Z")

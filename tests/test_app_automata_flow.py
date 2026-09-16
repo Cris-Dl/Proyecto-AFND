@@ -10,9 +10,13 @@ from services.routing_service import GAMERGEAR_STORE_LOCATION, build_fallback_ro
 class FakePage:
     def __init__(self):
         self.opened = []
+        self.closed = []
 
     def open(self, control):
         self.opened.append(control)
+
+    def close(self, control):
+        self.closed.append(control)
 
 
 class FakeOrdersService:
@@ -50,6 +54,24 @@ class FakeOrdersService:
         )
         return True, "Entregado.", self.order
 
+    def cancel_order(self, order_id, username):
+        if self.order.id_pedido != order_id:
+            return False, "No existe.", None
+        if self.order.usuario != username:
+            return False, "No autorizado.", None
+        if self.order.estado_afnd != "q5":
+            return False, "Estado inválido.", None
+        self.order = OrderRecord(
+            self.order.id_pedido,
+            self.order.usuario,
+            self.order.producto,
+            self.order.cantidad,
+            self.order.precio,
+            self.order.total,
+            "q10",
+        )
+        return True, "Pedido cancelado correctamente.", self.order
+
 
 class FailingCreateOrdersService(FakeOrdersService):
     def create_order(self, products, username, product_id, quantity):
@@ -59,6 +81,11 @@ class FailingCreateOrdersService(FakeOrdersService):
 class FailingDeliveryOrdersService(FakeOrdersService):
     def finish_order(self, order_id):
         return False, "Entrega rechazada.", None
+
+
+class FailingCancellationOrdersService(FakeOrdersService):
+    def cancel_order(self, order_id, username):
+        return False, "Cancelación rechazada.", None
 
 
 class FakeRoutingService:
@@ -317,6 +344,98 @@ class AppAutomataFlowTests(unittest.TestCase):
         self.assertEqual(snapshot.chain, "I-P-G-R")
         self.assertEqual(snapshot.result.active_states, frozenset({"q5"}))
         self.assertEqual(self.application.orders_service.order.estado_afnd, "q5")
+
+    def test_first_cancel_click_only_opens_confirmation(self):
+        self.application.begin_purchase(1)
+        self.application.confirm_real_order()
+        chain_before = self.application.afnd_integration.snapshot().chain
+
+        self.application.request_order_cancellation(1)
+
+        self.assertEqual(self.application.orders_service.order.estado_afnd, "q5")
+        self.assertEqual(self.application.afnd_integration.snapshot().chain, chain_before)
+        self.assertIsInstance(self.application.page.opened[-1], __import__("flet").AlertDialog)
+
+    def test_normal_order_cancellation_persists_before_x(self):
+        self.application.begin_purchase(1)
+        self.application.confirm_real_order()
+        self.application.advance_tracking()
+
+        self.application.confirm_order_cancellation(1)
+
+        snapshot = self.application.afnd_integration.snapshot()
+        self.assertEqual(self.application.orders_service.order.estado_afnd, "q10")
+        self.assertEqual(snapshot.chain, "I-P-G-R-R-X")
+        self.assertEqual(snapshot.result.active_states, frozenset({"q10"}))
+
+    def test_alternative_b_order_can_be_cancelled_in_tracking(self):
+        product = get_demo_products()[1]
+        self.application.selected_product = product
+        self.application.search_alternatives()
+        self.application.select_alternative_source("B")
+        self.application.selected_delivery_location = (14.8400, -91.5258)
+        self.application.confirm_real_order()
+        self.application.advance_tracking()
+
+        self.application.confirm_order_cancellation(1)
+
+        snapshot = self.application.afnd_integration.snapshot()
+        self.assertEqual(snapshot.chain, "I-P-D-B-G-R-R-X")
+        self.assertEqual(snapshot.result.active_states, frozenset({"q10"}))
+        self.assertEqual(self.application.orders_service.order.estado_afnd, "q10")
+
+    def test_cancelled_order_cannot_advance_or_be_delivered(self):
+        self.application.begin_purchase(1)
+        self.application.confirm_real_order()
+        self.application.confirm_order_cancellation(1)
+        chain_after_cancel = self.application.afnd_integration.snapshot().chain
+        progress_after_cancel = self.application.tracking_progress[1]
+
+        self.application.advance_tracking()
+        self.application.deliver_order()
+
+        self.assertEqual(self.application.afnd_integration.snapshot().chain, chain_after_cancel)
+        self.assertEqual(self.application.tracking_progress[1], progress_after_cancel)
+        self.assertEqual(self.application.orders_service.order.estado_afnd, "q10")
+
+    def test_sqlite_failure_does_not_emit_x(self):
+        self.application.orders_service = FailingCancellationOrdersService()
+        self.application.alternative_orders_service = FakeAlternativeOrdersService(
+            self.application.orders_service
+        )
+        self.application.begin_purchase(1)
+        self.application.confirm_real_order()
+        chain_before = self.application.afnd_integration.snapshot().chain
+
+        self.application.confirm_order_cancellation(1)
+
+        self.assertEqual(self.application.afnd_integration.snapshot().chain, chain_before)
+        self.assertEqual(self.application.orders_service.order.estado_afnd, "q5")
+
+    def test_delivered_order_cannot_be_cancelled_or_receive_x(self):
+        self.application.begin_purchase(1)
+        self.application.confirm_real_order()
+        route = self.application.tracking_routes[1]
+        for _ in range(len(route.simulation_points) - 1):
+            self.application.advance_tracking()
+        self.application.deliver_order()
+        chain_after_delivery = self.application.afnd_integration.snapshot().chain
+
+        self.application.confirm_order_cancellation(1)
+
+        self.assertEqual(self.application.afnd_integration.snapshot().chain, chain_after_delivery)
+        self.assertEqual(self.application.orders_service.order.estado_afnd, "q6")
+
+    def test_cancelled_order_cannot_be_cancelled_twice(self):
+        self.application.begin_purchase(1)
+        self.application.confirm_real_order()
+        self.application.confirm_order_cancellation(1)
+        chain_after_cancel = self.application.afnd_integration.snapshot().chain
+
+        self.application.confirm_order_cancellation(1)
+
+        self.assertEqual(self.application.afnd_integration.snapshot().chain, chain_after_cancel)
+        self.assertEqual(self.application.orders_service.order.estado_afnd, "q10")
 
 
 if __name__ == "__main__":

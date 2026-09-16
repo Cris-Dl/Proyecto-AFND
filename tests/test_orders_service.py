@@ -87,6 +87,42 @@ class OrdersServiceTests(unittest.TestCase):
             ["id_pedido", "usuario", "producto", "cantidad", "precio", "total", "estado_afnd"],
         )
 
+    def test_owner_can_cancel_q5_without_changing_financial_data(self):
+        created = self.service.create_order(self.products, "ana", 7, 2).order
+        before = (created.cantidad, created.precio, created.total)
+        stock_after_purchase = self.products[0]["existencia"]
+
+        success, _message, cancelled = self.service.cancel_order(created.id_pedido, "ana")
+
+        self.assertTrue(success)
+        self.assertEqual(cancelled.estado_afnd, "q10")
+        self.assertEqual((cancelled.cantidad, cancelled.precio, cancelled.total), before)
+        self.assertEqual(self.products[0]["existencia"], stock_after_purchase)
+        self.assertEqual(len(self.service.get_orders_by_user("ana")), 1)
+
+    def test_other_user_cannot_cancel_order(self):
+        created = self.service.create_order(self.products, "ana", 7, 1).order
+        success, _message, cancelled = self.service.cancel_order(created.id_pedido, "luis")
+        self.assertFalse(success)
+        self.assertIsNone(cancelled)
+        self.assertEqual(self.service.get_order_by_id(created.id_pedido).estado_afnd, "q5")
+
+    def test_delivered_order_cannot_be_cancelled(self):
+        created = self.service.create_order(self.products, "ana", 7, 1).order
+        self.service.finish_order(created.id_pedido)
+        success, _message, cancelled = self.service.cancel_order(created.id_pedido, "ana")
+        self.assertFalse(success)
+        self.assertIsNone(cancelled)
+        self.assertEqual(self.service.get_order_by_id(created.id_pedido).estado_afnd, "q6")
+
+    def test_cancelled_order_cannot_be_cancelled_twice(self):
+        created = self.service.create_order(self.products, "ana", 7, 1).order
+        self.assertTrue(self.service.cancel_order(created.id_pedido, "ana")[0])
+        success, _message, cancelled = self.service.cancel_order(created.id_pedido, "ana")
+        self.assertFalse(success)
+        self.assertIsNone(cancelled)
+        self.assertEqual(self.service.get_order_by_id(created.id_pedido).estado_afnd, "q10")
+
 
 if __name__ == "__main__":
     unittest.main()
