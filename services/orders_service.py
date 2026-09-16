@@ -121,3 +121,50 @@ class OrdersService:
     def finish_order(self, order_id):
         success, message = finalizar_venta(order_id)
         return success, message, self.get_order_by_id(order_id) if success else None
+
+    def cancel_order(self, order_id, username):
+        """Cancela únicamente un pedido q5 perteneciente al usuario indicado."""
+
+        if not username:
+            return False, "No hay una sesión autenticada para cancelar el pedido.", None
+
+        try:
+            with closing(sqlite3.connect(self.db_path)) as connection:
+                row = connection.execute(
+                    "SELECT usuario, estado_afnd FROM pedidos WHERE id_pedido = ?",
+                    (order_id,),
+                ).fetchone()
+                if not row:
+                    return False, "El pedido no existe.", None
+                if row[0] != username:
+                    return False, "No puedes cancelar un pedido de otro usuario.", None
+                if row[1] != "q5":
+                    return False, f"El pedido no puede cancelarse desde el estado {row[1]}.", None
+
+                cursor = connection.execute(
+                    """
+                    UPDATE pedidos
+                    SET estado_afnd = 'q10'
+                    WHERE id_pedido = ? AND usuario = ? AND estado_afnd = 'q5'
+                    """,
+                    (order_id, username),
+                )
+                if cursor.rowcount != 1:
+                    connection.rollback()
+                    return False, "El pedido cambió de estado antes de poder cancelarse.", None
+                updated_row = connection.execute(
+                    """
+                    SELECT id_pedido, usuario, producto, cantidad, precio, total, estado_afnd
+                    FROM pedidos
+                    WHERE id_pedido = ? AND usuario = ?
+                    """,
+                    (order_id, username),
+                ).fetchone()
+                if not updated_row or updated_row[-1] != "q10":
+                    connection.rollback()
+                    return False, "No fue posible comprobar la cancelación del pedido.", None
+                connection.commit()
+        except sqlite3.Error:
+            return False, "No fue posible cancelar el pedido en la base de datos.", None
+
+        return True, "Pedido cancelado correctamente.", OrderRecord.from_row(updated_row)
