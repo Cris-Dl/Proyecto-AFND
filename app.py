@@ -28,6 +28,7 @@ class GamerGearApp:
         self.products_error = None
         self.search_query = ""
         self.selected_product = None
+        self.route_before_login = "inicio"
         self.layout_mode = self.get_layout_mode(page.width or WIDE_BREAKPOINT)
         self.compact_navigation = self.layout_mode != "wide"
         self.secondary_navigation = []
@@ -127,7 +128,7 @@ class GamerGearApp:
             return build_login_view(
                 self.page,
                 on_auth_success=self.handle_auth_success,
-                on_back=lambda: self.navigate("inicio"),
+                on_back=self.return_from_login,
             )
 
         return build_home_view(
@@ -154,7 +155,12 @@ class GamerGearApp:
         self.render()
 
     def open_account(self):
-        self.navigate("perfil" if self.usuario_autenticado else "login")
+        if self.usuario_autenticado:
+            self.navigate("perfil")
+            return
+
+        self.route_before_login = "productos" if self.current_route == "detalle" else self.current_route
+        self.navigate("login")
 
     def search_products(self, query):
         self.search_query = query
@@ -164,7 +170,13 @@ class GamerGearApp:
 
     def handle_auth_success(self, usuario):
         self.usuario_autenticado = usuario
-        self.navigate("inicio")
+        self.return_from_login()
+
+    def return_from_login(self):
+        destination = self.route_before_login
+        if destination == "login":
+            destination = "inicio"
+        self.navigate(destination)
 
     def retry_products(self):
         self.products_loading = True
