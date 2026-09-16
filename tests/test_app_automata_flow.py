@@ -3,6 +3,7 @@ import unittest
 from app import GamerGearApp
 from automata.integration import GamerGearAutomataIntegration
 from services.orders_service import OrderCreationResult, OrderRecord
+from services.routing_service import GAMERGEAR_STORE_LOCATION, build_fallback_route
 
 
 class FakePage:
@@ -57,6 +58,11 @@ class FailingDeliveryOrdersService(FakeOrdersService):
         return False, "Entrega rechazada.", None
 
 
+class FakeRoutingService:
+    def route_for(self, destination):
+        return build_fallback_route(GAMERGEAR_STORE_LOCATION, destination)
+
+
 class AppAutomataFlowTests(unittest.TestCase):
     def setUp(self):
         self.application = GamerGearApp.__new__(GamerGearApp)
@@ -71,6 +77,12 @@ class AppAutomataFlowTests(unittest.TestCase):
         self.application.orders_service = FakeOrdersService()
         self.application.selected_order_id = None
         self.application.tracking_progress = {}
+        self.application.selected_delivery_location = (14.8400, -91.5258)
+        self.application.delivery_location_draft = None
+        self.application.delivery_locations = {}
+        self.application.tracking_routes = {}
+        self.application.location_selection_order_id = None
+        self.application.routing_service = FakeRoutingService()
         self.application.render = lambda *args, **kwargs: None
 
     def test_authenticated_purchase_and_confirmation_emit_i_p_g_r(self):
@@ -108,6 +120,9 @@ class AppAutomataFlowTests(unittest.TestCase):
         self.assertEqual(self.application.afnd_integration.snapshot().chain, "")
 
     def test_tracking_progress_moves_without_changing_persisted_state(self):
+        self.application.tracking_routes[1] = self.application.routing_service.route_for(
+            self.application.selected_delivery_location
+        )
         self.application.open_tracking(1)
         self.application.advance_tracking()
         self.application.advance_tracking()
@@ -122,8 +137,10 @@ class AppAutomataFlowTests(unittest.TestCase):
         )
 
     def test_delivery_persists_q6_before_emitting_e(self):
+        route = self.application.routing_service.route_for(self.application.selected_delivery_location)
+        self.application.tracking_routes[1] = route
         self.application.open_tracking(1)
-        for _ in range(2):
+        for _ in range(len(route.simulation_points) - 1):
             self.application.advance_tracking()
 
         self.application.deliver_order()
@@ -144,10 +161,33 @@ class AppAutomataFlowTests(unittest.TestCase):
         self.assertEqual(snapshot.chain, "I-P-G")
         self.assertEqual(snapshot.result.active_states, frozenset({"q4"}))
 
+    def test_confirmation_without_location_does_not_emit_g_or_create_order(self):
+        self.application.begin_purchase(1)
+        self.application.selected_delivery_location = None
+
+        self.application.confirm_real_order()
+
+        snapshot = self.application.afnd_integration.snapshot()
+        self.assertEqual(snapshot.chain, "I-P")
+        self.assertEqual(snapshot.result.active_states, frozenset({"q3"}))
+
+    def test_selecting_or_changing_location_does_not_emit_symbols(self):
+        self.application.begin_purchase(1)
+        original_chain = self.application.afnd_integration.snapshot().chain
+
+        self.application.open_delivery_location()
+        self.application.select_delivery_point((14.842, -91.53))
+        self.application.use_delivery_location()
+
+        self.assertEqual(self.application.current_route, "revisar_pedido")
+        self.assertEqual(self.application.afnd_integration.snapshot().chain, original_chain)
+
     def test_failed_finalize_sale_does_not_emit_e(self):
         self.application.orders_service = FailingDeliveryOrdersService()
+        route = self.application.routing_service.route_for(self.application.selected_delivery_location)
+        self.application.tracking_routes[1] = route
         self.application.open_tracking(1)
-        self.application.tracking_progress[1] = 2
+        self.application.tracking_progress[1] = len(route.simulation_points) - 1
 
         self.application.deliver_order()
 

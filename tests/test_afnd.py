@@ -41,6 +41,11 @@ class AFNDTests(unittest.TestCase):
             frozenset({"q5"}),
         ])
 
+    def test_requested_tracking_chain_reaches_delivery(self):
+        result = self.afnd.process_string("I-P-G-R-R-E")
+        self.assertTrue(result.accepted)
+        self.assertEqual(result.active_states, frozenset({"q6"}))
+
     def test_invalid_symbol_is_reported(self):
         result = self.afnd.process_string("I-P-D-Z-G-R-E")
         self.assertEqual(result.invalid_symbol, "Z")

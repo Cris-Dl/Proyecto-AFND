@@ -1,6 +1,7 @@
 import flet as ft
 import flet_map as fmap
 
+from services.routing_service import GAMERGEAR_STORE_LABEL
 from ui.theme import (
     BORDER,
     PRIMARY,
@@ -13,10 +14,9 @@ from ui.theme import (
 )
 
 
-ROUTE_COORDINATES = (
-    (14.8335, -91.5188),
-    (14.8360, -91.5222),
-    (14.8400, -91.5258),
+ESRI_TILE_URL = (
+    "https://server.arcgisonline.com/ArcGIS/rest/services/"
+    "World_Street_Map/MapServer/tile/{z}/{y}/{x}"
 )
 
 
@@ -58,24 +58,33 @@ def _timeline_item(label, state):
 
 def build_tracking_view(
     order,
+    route_result,
     progress_index,
     on_back,
     on_advance,
     on_deliver,
     layout_mode="wide",
 ):
-    progress_index = min(max(0, progress_index), len(ROUTE_COORDINATES) - 1)
+    route_coordinates = route_result.primary.coordinates
+    simulation_points = route_result.simulation_points
+    last_index = len(simulation_points) - 1
+    progress_index = min(max(0, progress_index), last_index)
     delivered = order.estado_afnd == "q6"
-    at_destination = progress_index == len(ROUTE_COORDINATES) - 1
-    remaining_steps = len(ROUTE_COORDINATES) - 1 - progress_index
-    eta = "Entregado" if delivered else "Llegando" if at_destination else f"{remaining_steps * 4} min aprox."
+    at_destination = progress_index == last_index
+    remaining_steps = last_index - progress_index
+    remaining_seconds = route_result.primary.duration_seconds * remaining_steps / max(1, last_index)
+    remaining_minutes = max(1, round(remaining_seconds / 60))
+    eta = "Entregado" if delivered else "Llegando" if at_destination else f"{remaining_minutes} min aprox."
 
-    route_points = [_point(*coordinates) for coordinates in ROUTE_COORDINATES]
+    route_points = [_point(*coordinates) for coordinates in route_coordinates]
+    origin = route_coordinates[0]
+    destination = route_coordinates[-1]
+    center = ((origin[0] + destination[0]) / 2, (origin[1] + destination[1]) / 2)
     markers = [
-        _marker(ROUTE_COORDINATES[0], ft.Icons.WAREHOUSE_ROUNDED, SECONDARY, "Origen simulado"),
-        _marker(ROUTE_COORDINATES[-1], ft.Icons.FLAG_ROUNDED, SUCCESS, "Destino simulado"),
+        _marker(origin, ft.Icons.STORE_ROUNDED, SECONDARY, GAMERGEAR_STORE_LABEL),
+        _marker(destination, ft.Icons.LOCATION_ON_ROUNDED, SUCCESS, "Punto de entrega seleccionado"),
         _marker(
-            ROUTE_COORDINATES[progress_index],
+            simulation_points[progress_index],
             ft.Icons.LOCAL_SHIPPING_ROUNDED,
             SUCCESS if delivered else PRIMARY,
             "Vehículo simulado",
@@ -83,18 +92,13 @@ def build_tracking_view(
     ]
 
     tracking_map = fmap.Map(
-        initial_center=_point(14.8365, -91.5223),
-        initial_zoom=15,
+        initial_center=_point(*center),
+        initial_zoom=14,
         min_zoom=3,
         max_zoom=19,
         interaction_configuration=fmap.MapInteractionConfiguration(flags=fmap.MapInteractiveFlag.ALL),
         layers=[
-            fmap.TileLayer(
-                url_template=(
-                    "https://server.arcgisonline.com/ArcGIS/rest/services/"
-                    "World_Street_Map/MapServer/tile/{z}/{y}/{x}"
-                )
-            ),
+            fmap.TileLayer(url_template=ESRI_TILE_URL),
             fmap.PolylineLayer(
                 polylines=[
                     fmap.PolylineMarker(
@@ -119,6 +123,12 @@ def build_tracking_view(
         expand=True,
     )
 
+    route_label = "Ruta calculada sobre red vial" if route_result.is_road_route else "Ruta simulada"
+    alternatives_label = (
+        f" · {len(route_result.alternatives)} rutas encontradas"
+        if route_result.is_road_route and len(route_result.alternatives) > 1
+        else ""
+    )
     map_panel = ft.Container(
         col={"xs": 12, "lg": 8},
         bgcolor=SURFACE_ELEVATED,
@@ -143,7 +153,7 @@ def build_tracking_view(
                             color=TEXT_SECONDARY,
                         ),
                         ft.Container(expand=True),
-                        ft.Text("Ruta de demostración · Quetzaltenango", size=10, color=TEXT_SECONDARY),
+                        ft.Text(f"{route_label}{alternatives_label}", size=10, color=TEXT_SECONDARY),
                     ],
                     wrap=True,
                 ),
@@ -181,7 +191,12 @@ def build_tracking_view(
                                         color=SUCCESS if delivered else PRIMARY,
                                         weight=ft.FontWeight.BOLD,
                                     ),
-                                    ft.Text(f"ETA simulada: {eta}", size=11, color=TEXT_SECONDARY),
+                                    ft.Text(f"ETA aproximada: {eta}", size=11, color=TEXT_SECONDARY),
+                                    ft.Text(
+                                        f"Distancia: {route_result.primary.distance_meters / 1000:.1f} km",
+                                        size=11,
+                                        color=TEXT_SECONDARY,
+                                    ),
                                 ],
                                 spacing=2,
                             ),
@@ -189,9 +204,10 @@ def build_tracking_view(
                         spacing=10,
                     ),
                 ),
+                ft.Text(route_label, size=11, color=PRIMARY if route_result.is_road_route else TEXT_SECONDARY),
                 ft.Text("Progreso", size=12, color=TEXT_PRIMARY, weight=ft.FontWeight.W_600),
                 ft.ProgressBar(
-                    value=1 if delivered else progress_index / (len(ROUTE_COORDINATES) - 1),
+                    value=1 if delivered else progress_index / max(1, last_index),
                     color=SUCCESS if delivered else PRIMARY,
                     bgcolor=BORDER,
                 ),

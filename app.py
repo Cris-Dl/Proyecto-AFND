@@ -5,11 +5,12 @@ import flet as ft
 from automata.integration import GamerGearAutomataIntegration
 from productos.gestor_productos import obtener_productos
 from services.orders_service import OrdersService
+from services.routing_service import RoutingService
 from ui.components import build_sidebar, build_top_bar
 from ui.theme import BACKGROUND, ERROR, SUCCESS, configure_page
 from ui.views import (
-    ROUTE_COORDINATES,
     build_afnd_visualizer,
+    build_delivery_location_view,
     build_home_view,
     build_login_view,
     build_order_review_view,
@@ -45,6 +46,12 @@ class GamerGearApp:
         self.orders_service = OrdersService()
         self.selected_order_id = None
         self.tracking_progress = {}
+        self.selected_delivery_location = None
+        self.delivery_location_draft = None
+        self.delivery_locations = {}
+        self.tracking_routes = {}
+        self.location_selection_order_id = None
+        self.routing_service = RoutingService()
 
         configure_page(page)
         page.on_resized = self.handle_resize
@@ -83,7 +90,7 @@ class GamerGearApp:
             return "pedidos"
         if self.current_route == "afnd":
             return "perfil"
-        if self.current_route in {"detalle", "revisar_pedido"}:
+        if self.current_route in {"detalle", "revisar_pedido", "seleccionar_entrega"}:
             return "productos"
         return self.current_route
 
@@ -141,8 +148,19 @@ class GamerGearApp:
                 usuario=self.usuario_autenticado,
                 producto=self.selected_product,
                 quantity=self.selected_quantity,
+                delivery_location=self.selected_delivery_location,
                 on_back=self.return_to_product,
+                on_select_location=self.open_delivery_location,
                 on_confirm=self.confirm_real_order,
+                layout_mode=self.layout_mode,
+            )
+
+        if self.current_route == "seleccionar_entrega" and self.usuario_autenticado:
+            return build_delivery_location_view(
+                selected_location=self.delivery_location_draft,
+                on_select=self.select_delivery_point,
+                on_cancel=self.cancel_delivery_location,
+                on_use=self.use_delivery_location,
                 layout_mode=self.layout_mode,
             )
 
@@ -161,8 +179,16 @@ class GamerGearApp:
                 username=self.usuario_autenticado,
             )
             if order:
+                route_result = self.tracking_routes.get(order.id_pedido)
+                if not route_result:
+                    return build_placeholder_view(
+                        "Ubicación de entrega pendiente",
+                        "Selecciona nuevamente el punto de entrega para continuar el seguimiento.",
+                        ft.Icons.LOCATION_ON_ROUNDED,
+                    )
                 return build_tracking_view(
                     order=order,
+                    route_result=route_result,
                     progress_index=self.tracking_progress.get(order.id_pedido, 0),
                     on_back=lambda: self.navigate("pedidos"),
                     on_advance=self.advance_tracking,
@@ -214,6 +240,9 @@ class GamerGearApp:
     def open_product(self, producto):
         self.selected_product = producto
         self.selected_quantity = 1
+        self.selected_delivery_location = None
+        self.delivery_location_draft = None
+        self.location_selection_order_id = None
         self.current_route = "detalle"
         self.render()
 
@@ -290,7 +319,65 @@ class GamerGearApp:
             return
         self.navigate("productos")
 
+    def open_delivery_location(self, order_id=None):
+        self.location_selection_order_id = order_id
+        if order_id is not None:
+            self.selected_delivery_location = self.delivery_locations.get(order_id)
+        self.delivery_location_draft = self.selected_delivery_location
+        self.current_route = "seleccionar_entrega"
+        self.render()
+
+    def select_delivery_point(self, coordinates):
+        self.delivery_location_draft = coordinates
+        self.render()
+
+    def cancel_delivery_location(self):
+        if self.location_selection_order_id is not None:
+            self.selected_delivery_location = None
+            self.current_route = "pedidos"
+        else:
+            self.current_route = "revisar_pedido"
+        self.delivery_location_draft = None
+        self.location_selection_order_id = None
+        self.render()
+
+    def use_delivery_location(self):
+        if self.delivery_location_draft is None:
+            return
+        self.selected_delivery_location = self.delivery_location_draft
+        if self.location_selection_order_id is None:
+            self.delivery_location_draft = None
+            self.current_route = "revisar_pedido"
+            self.render()
+            return
+
+        order_id = self.location_selection_order_id
+        self.delivery_locations[order_id] = self.selected_delivery_location
+        self.tracking_routes[order_id] = self.routing_service.route_for(
+            self.selected_delivery_location
+        )
+        self.tracking_progress[order_id] = 0
+        self.selected_order_id = order_id
+        self.delivery_location_draft = None
+        self.location_selection_order_id = None
+        self.current_route = "tracking"
+        self.render()
+
     def confirm_real_order(self):
+        if (
+            not self.selected_product
+            or self.selected_quantity < 1
+            or not self.usuario_autenticado
+            or self.selected_delivery_location is None
+        ):
+            self.page.open(
+                ft.SnackBar(
+                    ft.Text("Selecciona una ubicación de entrega antes de confirmar."),
+                    bgcolor=ERROR,
+                )
+            )
+            return
+
         self.afnd_integration.confirm_order()
         result = self.orders_service.create_order(
             products=self.productos,
@@ -302,10 +389,17 @@ class GamerGearApp:
             self.page.open(ft.SnackBar(ft.Text(result.message), bgcolor=ERROR))
             return
 
+        self.delivery_locations[result.order.id_pedido] = self.selected_delivery_location
+        self.tracking_routes[result.order.id_pedido] = self.routing_service.route_for(
+            self.selected_delivery_location
+        )
+        self.tracking_progress[result.order.id_pedido] = 0
         self.afnd_integration.start_tracking()
         self.current_route = "pedidos"
         self.selected_product = None
         self.selected_quantity = 1
+        self.selected_delivery_location = None
+        self.delivery_location_draft = None
         self.render()
         self.page.open(
             ft.SnackBar(
@@ -324,6 +418,10 @@ class GamerGearApp:
             return
         if self.afnd_integration.snapshot().result.active_states != frozenset({"q5"}):
             self.afnd_integration.resume_tracking()
+        if order.id_pedido not in self.tracking_routes:
+            self.selected_order_id = order.id_pedido
+            self.open_delivery_location(order.id_pedido)
+            return
         self.selected_order_id = order.id_pedido
         self.tracking_progress.setdefault(order.id_pedido, 0)
         self.current_route = "tracking"
@@ -336,7 +434,10 @@ class GamerGearApp:
         )
         if not order or order.estado_afnd != "q5":
             return
-        last_index = len(ROUTE_COORDINATES) - 1
+        route_result = self.tracking_routes.get(order.id_pedido)
+        if not route_result:
+            return
+        last_index = len(route_result.simulation_points) - 1
         current = self.tracking_progress.get(order.id_pedido, 0)
         if current >= last_index:
             return
@@ -349,7 +450,8 @@ class GamerGearApp:
             self.selected_order_id,
             username=self.usuario_autenticado,
         )
-        last_index = len(ROUTE_COORDINATES) - 1
+        route_result = self.tracking_routes.get(order.id_pedido) if order else None
+        last_index = len(route_result.simulation_points) - 1 if route_result else -1
         if (
             not order
             or order.estado_afnd != "q5"
@@ -369,11 +471,17 @@ class GamerGearApp:
     def logout(self):
         self.usuario_autenticado = None
         self.route_before_login = "inicio"
-        if self.current_route in {"perfil", "revisar_pedido", "tracking"}:
+        if self.current_route in {"perfil", "revisar_pedido", "seleccionar_entrega", "tracking"}:
             self.current_route = "inicio"
         self.selected_product = None
         self.selected_order_id = None
         self.selected_quantity = 1
+        self.selected_delivery_location = None
+        self.delivery_location_draft = None
+        self.location_selection_order_id = None
+        self.delivery_locations.clear()
+        self.tracking_routes.clear()
+        self.tracking_progress.clear()
         self.render()
 
     def retry_products(self):

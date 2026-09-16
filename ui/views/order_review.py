@@ -1,13 +1,16 @@
 import flet as ft
 
 from ui.theme import BORDER, PRIMARY, SECONDARY, SURFACE, SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_SECONDARY
+from ui.views.delivery_location import format_location
 
 
 def build_order_review_view(
     usuario,
     producto,
     quantity,
+    delivery_location,
     on_back,
+    on_select_location,
     on_confirm,
     layout_mode="wide",
 ):
@@ -53,6 +56,7 @@ def build_order_review_view(
                     "Confirmar pedido",
                     icon=ft.Icons.CHECK_CIRCLE_ROUNDED,
                     width=float("inf"),
+                    disabled=delivery_location is None,
                     on_click=lambda _: on_confirm(),
                     style=ft.ButtonStyle(bgcolor=PRIMARY, color="#031018"),
                 ),
@@ -115,6 +119,55 @@ def build_order_review_view(
                                                 summary_line("Precio unitario", f"Q{unit_price:.2f}"),
                                                 ft.Divider(color=BORDER, height=18),
                                                 summary_line("Total", f"Q{total:.2f}", emphasized=True),
+                                            ],
+                                            spacing=10,
+                                        ),
+                                    ),
+                                    ft.Container(
+                                        bgcolor=SURFACE,
+                                        border=ft.border.all(1, PRIMARY if delivery_location else BORDER),
+                                        border_radius=14,
+                                        padding=16,
+                                        content=ft.Column(
+                                            controls=[
+                                                ft.Text(
+                                                    "Entrega",
+                                                    size=14,
+                                                    color=TEXT_PRIMARY,
+                                                    weight=ft.FontWeight.BOLD,
+                                                ),
+                                                ft.Row(
+                                                    controls=[
+                                                        ft.Icon(
+                                                            ft.Icons.LOCATION_ON_ROUNDED,
+                                                            color=PRIMARY if delivery_location else TEXT_SECONDARY,
+                                                        ),
+                                                        ft.Text(
+                                                            format_location(delivery_location),
+                                                            size=12,
+                                                            color=(
+                                                                TEXT_PRIMARY
+                                                                if delivery_location
+                                                                else TEXT_SECONDARY
+                                                            ),
+                                                        ),
+                                                    ],
+                                                    wrap=True,
+                                                ),
+                                                ft.OutlinedButton(
+                                                    (
+                                                        "Cambiar ubicación"
+                                                        if delivery_location
+                                                        else "Seleccionar ubicación de entrega"
+                                                    ),
+                                                    icon=ft.Icons.MAP_ROUNDED,
+                                                    width=float("inf"),
+                                                    on_click=lambda _: on_select_location(),
+                                                    style=ft.ButtonStyle(
+                                                        color=PRIMARY,
+                                                        side=ft.BorderSide(1, PRIMARY),
+                                                    ),
+                                                ),
                                             ],
                                             spacing=10,
                                         ),
