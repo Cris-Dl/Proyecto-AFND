@@ -3,6 +3,8 @@ import sqlite3
 import pickle
 import time
 
+from database_config import DB_PATH
+
 try:
     import cv2
     import face_recognition
@@ -13,7 +15,7 @@ except ImportError:
     IA_DISPONIBLE = False
 
 def inicializar_bd():
-    conexion = sqlite3.connect("gamergear.db")
+    conexion = sqlite3.connect(DB_PATH)
     cursor = conexion.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS usuarios (
@@ -225,7 +227,7 @@ class VistaLogin(ft.Column):
             self.mostrar_mensaje("Por favor, llena ambos campos", ft.Colors.RED)
             return
 
-        conexion = sqlite3.connect("gamergear.db")
+        conexion = sqlite3.connect(DB_PATH)
         cursor = conexion.cursor()
         cursor.execute("SELECT nombre_completo FROM usuarios WHERE usuario=? AND password=?", (u, p))
         resultado = cursor.fetchone()
@@ -255,7 +257,7 @@ class VistaLogin(ft.Column):
             self.mostrar_mensaje("Librerías de reconocimiento no disponibles", ft.Colors.RED)
             return
 
-        conexion = sqlite3.connect("gamergear.db")
+        conexion = sqlite3.connect(DB_PATH)
         cursor = conexion.cursor()
         cursor.execute("SELECT usuario, rostro FROM usuarios WHERE rostro IS NOT NULL")
         filas = cursor.fetchall()
@@ -373,7 +375,7 @@ class VistaLogin(ft.Column):
             rostro_datos = pickle.dumps(encoding_rostro)
 
         try:
-            conexion = sqlite3.connect("gamergear.db")
+            conexion = sqlite3.connect(DB_PATH)
             cursor = conexion.cursor()
             cursor.execute(
                 "INSERT INTO usuarios (usuario, password, nombre_completo, correo, sexo, telefono, direccion, rostro) "
@@ -409,7 +411,7 @@ class VistaLogin(ft.Column):
         c = self.rec_correo.value
         if not c:
             return
-        conexion = sqlite3.connect("gamergear.db")
+        conexion = sqlite3.connect(DB_PATH)
         cursor = conexion.cursor()
         cursor.execute("SELECT usuario, password FROM usuarios WHERE correo=?", (c,))
         res = cursor.fetchone()
