@@ -4,10 +4,11 @@ import flet as ft
 
 from productos.gestor_productos import obtener_productos
 from ui.components import build_sidebar, build_top_bar
-from ui.theme import BACKGROUND, configure_page
+from ui.theme import BACKGROUND, SUCCESS, configure_page
 from ui.views import (
     build_home_view,
     build_login_view,
+    build_order_review_view,
     build_placeholder_view,
     build_product_detail_view,
     build_products_view,
@@ -29,6 +30,7 @@ class GamerGearApp:
         self.products_error = None
         self.search_query = ""
         self.selected_product = None
+        self.selected_quantity = 1
         self.route_before_login = "inicio"
         self.layout_mode = self.get_layout_mode(page.width or WIDE_BREAKPOINT)
         self.compact_navigation = self.layout_mode != "wide"
@@ -67,7 +69,7 @@ class GamerGearApp:
         return {"narrow": 1, "medium": 2, "wide": 3}[self.layout_mode]
 
     def selected_navigation_route(self):
-        if self.current_route == "detalle":
+        if self.current_route in {"detalle", "revisar_pedido"}:
             return "productos"
         return self.current_route
 
@@ -108,7 +110,25 @@ class GamerGearApp:
         if self.current_route == "detalle" and self.selected_product:
             return build_product_detail_view(
                 self.selected_product,
+                quantity=self.selected_quantity,
+                on_quantity_change=self.update_selected_quantity,
+                on_buy=self.begin_purchase,
                 on_back=lambda: self.navigate("productos"),
+                layout_mode=self.layout_mode,
+            )
+
+        if (
+            self.current_route == "revisar_pedido"
+            and self.selected_product
+            and self.usuario_autenticado
+        ):
+            return build_order_review_view(
+                usuario=self.usuario_autenticado,
+                producto=self.selected_product,
+                quantity=self.selected_quantity,
+                on_back=self.return_to_product,
+                on_continue=self.continue_order,
+                layout_mode=self.layout_mode,
             )
 
         if self.current_route == "pedidos":
@@ -152,6 +172,7 @@ class GamerGearApp:
 
     def open_product(self, producto):
         self.selected_product = producto
+        self.selected_quantity = 1
         self.current_route = "detalle"
         self.render()
 
@@ -160,7 +181,13 @@ class GamerGearApp:
             self.navigate("perfil")
             return
 
-        self.route_before_login = "productos" if self.current_route == "detalle" else self.current_route
+        if self.current_route == "detalle" and self.selected_product:
+            self.route_before_login = "detalle"
+            self.current_route = "login"
+            self.render()
+            return
+
+        self.route_before_login = self.current_route
         self.navigate("login")
 
     def search_products(self, query):
@@ -177,14 +204,47 @@ class GamerGearApp:
         destination = self.route_before_login
         if destination == "login":
             destination = "inicio"
+        if destination == "detalle" and self.selected_product:
+            self.current_route = "detalle"
+            self.render()
+            return
         self.navigate(destination)
+
+    def update_selected_quantity(self, quantity):
+        self.selected_quantity = quantity
+
+    def begin_purchase(self, quantity):
+        self.selected_quantity = quantity
+        if not self.usuario_autenticado:
+            self.route_before_login = "detalle"
+            self.current_route = "login"
+            self.render()
+            return
+        self.current_route = "revisar_pedido"
+        self.render()
+
+    def return_to_product(self):
+        if self.selected_product:
+            self.current_route = "detalle"
+            self.render()
+            return
+        self.navigate("productos")
+
+    def continue_order(self):
+        self.page.open(
+            ft.SnackBar(
+                ft.Text("El pedido está listo para ser procesado."),
+                bgcolor=SUCCESS,
+            )
+        )
 
     def logout(self):
         self.usuario_autenticado = None
         self.route_before_login = "inicio"
-        if self.current_route == "perfil":
+        if self.current_route in {"perfil", "revisar_pedido"}:
             self.current_route = "inicio"
         self.selected_product = None
+        self.selected_quantity = 1
         self.render()
 
     def retry_products(self):
