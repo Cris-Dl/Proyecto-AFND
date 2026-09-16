@@ -4,13 +4,15 @@ import flet as ft
 
 from automata.integration import GamerGearAutomataIntegration
 from productos.gestor_productos import obtener_productos
-from services.alternative_availability import get_demo_products
+from services.alternative_availability import evaluate_alternative_availability, get_demo_products
+from services.alternative_orders_service import AlternativeOrdersService
 from services.orders_service import OrdersService
 from services.routing_service import RoutingService
 from ui.components import build_sidebar, build_top_bar
 from ui.theme import BACKGROUND, ERROR, SUCCESS, configure_page
 from ui.views import (
     build_afnd_visualizer,
+    build_alternatives_view,
     build_delivery_location_view,
     build_home_view,
     build_login_view,
@@ -46,6 +48,7 @@ class GamerGearApp:
         self.secondary_navigation = []
         self.afnd_integration = GamerGearAutomataIntegration()
         self.orders_service = OrdersService()
+        self.alternative_orders_service = AlternativeOrdersService()
         self.selected_order_id = None
         self.tracking_progress = {}
         self.selected_delivery_location = None
@@ -54,6 +57,11 @@ class GamerGearApp:
         self.tracking_routes = {}
         self.location_selection_order_id = None
         self.routing_service = RoutingService()
+        self.alternative_availability = None
+        self.selected_supply_symbol = None
+        self.selected_supply_source = None
+        self.alternative_cancelled = False
+        self.order_supply_sources = {}
 
         configure_page(page)
         page.on_resized = self.handle_resize
@@ -92,7 +100,7 @@ class GamerGearApp:
             return "pedidos"
         if self.current_route == "afnd":
             return "perfil"
-        if self.current_route in {"detalle", "revisar_pedido", "seleccionar_entrega"}:
+        if self.current_route in {"detalle", "alternativas", "revisar_pedido", "seleccionar_entrega"}:
             return "productos"
         return self.current_route
 
@@ -156,6 +164,21 @@ class GamerGearApp:
                 on_select_location=self.open_delivery_location,
                 on_confirm=self.confirm_real_order,
                 layout_mode=self.layout_mode,
+                supply_source=self.selected_supply_source,
+            )
+
+        if (
+            self.current_route == "alternativas"
+            and self.selected_product
+            and self.alternative_availability
+        ):
+            return build_alternatives_view(
+                product=self.selected_product,
+                availability=self.alternative_availability,
+                cancelled=self.alternative_cancelled,
+                on_use=self.select_alternative_source,
+                on_cancel_request=self.cancel_alternative_request,
+                on_back=self.return_from_alternatives,
             )
 
         if self.current_route == "seleccionar_entrega" and self.usuario_autenticado:
@@ -246,6 +269,10 @@ class GamerGearApp:
         self.selected_delivery_location = None
         self.delivery_location_draft = None
         self.location_selection_order_id = None
+        self.alternative_availability = None
+        self.selected_supply_symbol = None
+        self.selected_supply_source = None
+        self.alternative_cancelled = False
         self.current_route = "detalle"
         self.render()
 
@@ -297,6 +324,10 @@ class GamerGearApp:
             self.current_route = "login"
             self.render()
             return
+        self.alternative_availability = None
+        self.selected_supply_symbol = None
+        self.selected_supply_source = None
+        self.alternative_cancelled = False
         self.afnd_integration.start_purchase()
         self.current_route = "revisar_pedido"
         self.render()
@@ -307,13 +338,60 @@ class GamerGearApp:
             self.current_route = "login"
             self.render()
             return
-        self.afnd_integration.search_alternatives()
-        self.page.open(
-            ft.SnackBar(
-                ft.Text("Búsqueda de alternativas iniciada."),
-                bgcolor=SUCCESS,
-            )
-        )
+        if not self.selected_product or int(self.selected_product.get("existencia", 0)) > 0:
+            return
+        self.alternative_availability = evaluate_alternative_availability(self.selected_product)
+        result = self.afnd_integration.search_alternatives()
+        if result.active_states != frozenset({"q7", "q8", "q9"}):
+            self.page.open(ft.SnackBar(ft.Text("No fue posible iniciar la búsqueda."), bgcolor=ERROR))
+            return
+        self.selected_supply_symbol = None
+        self.selected_supply_source = None
+        self.alternative_cancelled = False
+        self.current_route = "alternativas"
+        self.render()
+
+    def select_alternative_source(self, symbol):
+        availability = self.alternative_availability
+        if (
+            not availability
+            or not availability.has_solution
+            or availability.scenario != symbol
+            or self.afnd_integration.snapshot().result.active_states
+            != frozenset({"q7", "q8", "q9"})
+        ):
+            return
+        result = self.afnd_integration.select_alternative(symbol)
+        if result.active_states != frozenset({"q3"}):
+            return
+        self.selected_supply_symbol = symbol
+        self.selected_supply_source = availability.source_label
+        self.selected_quantity = 1
+        self.selected_delivery_location = None
+        self.current_route = "revisar_pedido"
+        self.render()
+
+    def cancel_alternative_request(self):
+        availability = self.alternative_availability
+        if (
+            not availability
+            or availability.has_solution
+            or self.afnd_integration.snapshot().result.active_states
+            != frozenset({"q7", "q8", "q9"})
+        ):
+            return
+        result = self.afnd_integration.cancel_alternatives()
+        if result.active_states != frozenset({"q10"}):
+            return
+        self.alternative_cancelled = True
+        self.render()
+
+    def return_from_alternatives(self):
+        if self.alternative_cancelled:
+            self.navigate("productos")
+            return
+        self.current_route = "detalle"
+        self.render()
 
     def return_to_product(self):
         if self.selected_product:
@@ -382,12 +460,20 @@ class GamerGearApp:
             return
 
         self.afnd_integration.confirm_order()
-        result = self.orders_service.create_order(
-            products=self.productos,
-            username=self.usuario_autenticado,
-            product_id=self.selected_product["id"],
-            quantity=self.selected_quantity,
-        )
+        if self.selected_supply_symbol:
+            result = self.alternative_orders_service.create_order(
+                product=self.selected_product,
+                username=self.usuario_autenticado,
+                quantity=self.selected_quantity,
+                source_symbol=self.selected_supply_symbol,
+            )
+        else:
+            result = self.orders_service.create_order(
+                products=self.productos,
+                username=self.usuario_autenticado,
+                product_id=self.selected_product["id"],
+                quantity=self.selected_quantity,
+            )
         if not result.success or not result.order or result.order.estado_afnd != "q5":
             self.page.open(ft.SnackBar(ft.Text(result.message), bgcolor=ERROR))
             return
@@ -397,12 +483,18 @@ class GamerGearApp:
             self.selected_delivery_location
         )
         self.tracking_progress[result.order.id_pedido] = 0
+        if self.selected_supply_source:
+            self.order_supply_sources[result.order.id_pedido] = self.selected_supply_source
         self.afnd_integration.start_tracking()
         self.current_route = "pedidos"
         self.selected_product = None
         self.selected_quantity = 1
         self.selected_delivery_location = None
         self.delivery_location_draft = None
+        self.alternative_availability = None
+        self.selected_supply_symbol = None
+        self.selected_supply_source = None
+        self.alternative_cancelled = False
         self.render()
         self.page.open(
             ft.SnackBar(
@@ -474,7 +566,7 @@ class GamerGearApp:
     def logout(self):
         self.usuario_autenticado = None
         self.route_before_login = "inicio"
-        if self.current_route in {"perfil", "revisar_pedido", "seleccionar_entrega", "tracking"}:
+        if self.current_route in {"perfil", "alternativas", "revisar_pedido", "seleccionar_entrega", "tracking"}:
             self.current_route = "inicio"
         self.selected_product = None
         self.selected_order_id = None
@@ -485,6 +577,11 @@ class GamerGearApp:
         self.delivery_locations.clear()
         self.tracking_routes.clear()
         self.tracking_progress.clear()
+        self.alternative_availability = None
+        self.selected_supply_symbol = None
+        self.selected_supply_source = None
+        self.alternative_cancelled = False
+        self.order_supply_sources.clear()
         self.render()
 
     def retry_products(self):

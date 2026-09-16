@@ -13,6 +13,7 @@ def build_order_review_view(
     on_select_location,
     on_confirm,
     layout_mode="wide",
+    supply_source=None,
 ):
     unit_price = producto["precio"]
     total = unit_price * quantity
@@ -121,6 +122,34 @@ def build_order_review_view(
                                                 summary_line("Total", f"Q{total:.2f}", emphasized=True),
                                             ],
                                             spacing=10,
+                                        ),
+                                    ),
+                                    ft.Container(
+                                        visible=bool(supply_source),
+                                        bgcolor="#0D2B2A",
+                                        border=ft.border.all(1, SECONDARY),
+                                        border_radius=14,
+                                        padding=14,
+                                        content=ft.Column(
+                                            controls=[
+                                                ft.Text(
+                                                    "Abastecimiento",
+                                                    size=11,
+                                                    color=TEXT_SECONDARY,
+                                                ),
+                                                ft.Text(
+                                                    supply_source or "",
+                                                    size=15,
+                                                    color=TEXT_PRIMARY,
+                                                    weight=ft.FontWeight.BOLD,
+                                                ),
+                                                ft.Text(
+                                                    "Simulación de disponibilidad alternativa",
+                                                    size=9,
+                                                    color=SECONDARY,
+                                                ),
+                                            ],
+                                            spacing=3,
                                         ),
                                     ),
                                     ft.Container(
