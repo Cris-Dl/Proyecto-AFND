@@ -4,13 +4,15 @@ import flet as ft
 
 from automata.integration import GamerGearAutomataIntegration
 from productos.gestor_productos import obtener_productos
+from services.orders_service import OrdersService
 from ui.components import build_sidebar, build_top_bar
-from ui.theme import BACKGROUND, SUCCESS, configure_page
+from ui.theme import BACKGROUND, ERROR, SUCCESS, configure_page
 from ui.views import (
     build_afnd_visualizer,
     build_home_view,
     build_login_view,
     build_order_review_view,
+    build_orders_view,
     build_placeholder_view,
     build_product_detail_view,
     build_products_view,
@@ -38,6 +40,7 @@ class GamerGearApp:
         self.compact_navigation = self.layout_mode != "wide"
         self.secondary_navigation = []
         self.afnd_integration = GamerGearAutomataIntegration()
+        self.orders_service = OrdersService()
 
         configure_page(page)
         page.on_resized = self.handle_resize
@@ -133,15 +136,17 @@ class GamerGearApp:
                 producto=self.selected_product,
                 quantity=self.selected_quantity,
                 on_back=self.return_to_product,
-                on_continue=self.continue_order,
+                on_confirm=self.confirm_real_order,
                 layout_mode=self.layout_mode,
             )
 
         if self.current_route == "pedidos":
-            return build_placeholder_view(
-                "Pedidos",
-                "Esta sección se integrará en la siguiente fase.",
-                ft.Icons.RECEIPT_LONG_ROUNDED,
+            orders = self.orders_service.get_orders_by_user(self.usuario_autenticado)
+            return build_orders_view(
+                username=self.usuario_autenticado,
+                orders=orders,
+                on_login=self.open_account,
+                on_track=self.open_tracking,
             )
 
         if self.current_route == "perfil":
@@ -264,11 +269,33 @@ class GamerGearApp:
             return
         self.navigate("productos")
 
-    def continue_order(self):
+    def confirm_real_order(self):
         self.afnd_integration.confirm_order()
+        result = self.orders_service.create_order(
+            products=self.productos,
+            username=self.usuario_autenticado,
+            product_id=self.selected_product["id"],
+            quantity=self.selected_quantity,
+        )
+        if not result.success:
+            self.page.open(ft.SnackBar(ft.Text(result.message), bgcolor=ERROR))
+            return
+
+        self.current_route = "pedidos"
+        self.selected_product = None
+        self.selected_quantity = 1
+        self.render()
         self.page.open(
             ft.SnackBar(
-                ft.Text("El pedido está listo para ser procesado."),
+                ft.Text(f"Pedido #{result.order.id_pedido} confirmado y en ruta."),
+                bgcolor=SUCCESS,
+            )
+        )
+
+    def open_tracking(self, _order_id):
+        self.page.open(
+            ft.SnackBar(
+                ft.Text("El seguimiento se habilitará en el siguiente bloque."),
                 bgcolor=SUCCESS,
             )
         )

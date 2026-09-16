@@ -8,7 +8,7 @@ def build_order_review_view(
     producto,
     quantity,
     on_back,
-    on_continue,
+    on_confirm,
     layout_mode="wide",
 ):
     unit_price = producto["precio"]
@@ -50,10 +50,10 @@ def build_order_review_view(
             ft.Container(
                 col={"xs": 12, "sm": 6},
                 content=ft.FilledButton(
-                    "Continuar con el pedido",
-                    icon=ft.Icons.ARROW_FORWARD_ROUNDED,
+                    "Confirmar pedido",
+                    icon=ft.Icons.CHECK_CIRCLE_ROUNDED,
                     width=float("inf"),
-                    on_click=lambda _: on_continue(),
+                    on_click=lambda _: on_confirm(),
                     style=ft.ButtonStyle(bgcolor=PRIMARY, color="#031018"),
                 ),
             ),
