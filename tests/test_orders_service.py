@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pedidos_ventas
+import services.orders_service as orders_service_module
 from services.orders_service import OrdersService
 
 
@@ -33,9 +34,14 @@ class OrdersServiceTests(unittest.TestCase):
         self.temporary_directory.cleanup()
 
     def test_create_order_uses_existing_product_logic_and_persists_q5(self):
-        result = self.service.create_order(self.products, "ana", 7, 2)
+        with patch(
+            "services.orders_service.realizar_pedido",
+            wraps=orders_service_module.realizar_pedido,
+        ) as realizar_pedido_mock:
+            result = self.service.create_order(self.products, "ana", 7, 2)
 
         self.assertTrue(result.success)
+        realizar_pedido_mock.assert_called_once_with(self.products, 7, 2)
         self.assertEqual(result.order.estado_afnd, "q5")
         self.assertEqual(result.order.total, 251.0)
         self.assertEqual(self.products[0]["existencia"], 3)

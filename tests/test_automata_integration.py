@@ -33,6 +33,20 @@ class AutomataIntegrationTests(unittest.TestCase):
         self.assertEqual(self.integration.snapshot().chain, "I-P-D")
         self.assertEqual(result.active_states, frozenset({"q7", "q8", "q9"}))
 
+    def test_each_available_source_returns_to_q3(self):
+        for symbol in ("S", "B", "V"):
+            with self.subTest(symbol=symbol):
+                self.integration.search_alternatives()
+                result = self.integration.select_alternative(symbol)
+                self.assertEqual(result.active_states, frozenset({"q3"}))
+                self.assertEqual(self.integration.snapshot().chain, f"I-P-D-{symbol}")
+
+    def test_no_solution_reaches_q10(self):
+        self.integration.search_alternatives()
+        result = self.integration.cancel_alternatives()
+        self.assertEqual(result.active_states, frozenset({"q10"}))
+        self.assertEqual(self.integration.snapshot().chain, "I-P-D-X")
+
     def test_new_purchase_does_not_depend_on_previous_flow(self):
         self.integration.search_alternatives()
         result = self.integration.start_purchase()
