@@ -60,5 +60,8 @@ class GamerGearAutomataIntegration:
     def delivery_completed(self):
         return self.session.record("E", "Entrega persistente confirmada")
 
+    def tracking_cancelled(self):
+        return self.session.record("X", "Pedido en seguimiento cancelado")
+
     def snapshot(self):
         return self.session.snapshot()

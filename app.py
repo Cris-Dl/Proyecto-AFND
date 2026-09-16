@@ -197,6 +197,7 @@ class GamerGearApp:
                 orders=orders,
                 on_login=self.open_account,
                 on_track=self.open_tracking,
+                on_cancel=self.request_order_cancellation,
             )
 
         if self.current_route == "tracking" and self.usuario_autenticado:
@@ -219,6 +220,7 @@ class GamerGearApp:
                     on_back=lambda: self.navigate("pedidos"),
                     on_advance=self.advance_tracking,
                     on_deliver=self.deliver_order,
+                    on_cancel=self.request_order_cancellation,
                     layout_mode=self.layout_mode,
                 )
 
@@ -483,6 +485,7 @@ class GamerGearApp:
             self.selected_delivery_location
         )
         self.tracking_progress[result.order.id_pedido] = 0
+        self.selected_order_id = result.order.id_pedido
         if self.selected_supply_source:
             self.order_supply_sources[result.order.id_pedido] = self.selected_supply_source
         self.afnd_integration.start_tracking()
@@ -562,6 +565,64 @@ class GamerGearApp:
         self.afnd_integration.delivery_completed()
         self.render()
         self.page.open(ft.SnackBar(ft.Text("Pedido entregado correctamente."), bgcolor=SUCCESS))
+
+    def request_order_cancellation(self, order_id):
+        order = self.orders_service.get_order_by_id(
+            order_id,
+            username=self.usuario_autenticado,
+        )
+        if not order or order.estado_afnd != "q5":
+            self.page.open(
+                ft.SnackBar(
+                    ft.Text("Este pedido no está disponible para cancelación."),
+                    bgcolor=ERROR,
+                )
+            )
+            return
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Cancelar pedido"),
+            content=ft.Text(
+                "El pedido todavía se encuentra en proceso de entrega. "
+                "Si continúas, el seguimiento se detendrá y el pedido quedará cancelado."
+            ),
+            actions=[
+                ft.TextButton("Volver", on_click=lambda _: self.page.close(dialog)),
+                ft.FilledButton(
+                    "Confirmar cancelación",
+                    icon=ft.Icons.CANCEL_ROUNDED,
+                    on_click=lambda _: self.confirm_order_cancellation(order_id, dialog),
+                    style=ft.ButtonStyle(bgcolor=ERROR, color="#16070B"),
+                ),
+            ],
+        )
+        self.page.open(dialog)
+
+    def confirm_order_cancellation(self, order_id, dialog=None):
+        continue_current_flow = (
+            self.selected_order_id == order_id
+            and self.afnd_integration.snapshot().result.active_states == frozenset({"q5"})
+        )
+        success, message, updated_order = self.orders_service.cancel_order(
+            order_id,
+            self.usuario_autenticado,
+        )
+        if not success or not updated_order or updated_order.estado_afnd != "q10":
+            if dialog is not None:
+                self.page.close(dialog)
+            self.page.open(ft.SnackBar(ft.Text(message), bgcolor=ERROR))
+            self.render()
+            return
+
+        if not continue_current_flow:
+            self.afnd_integration.resume_tracking()
+        self.selected_order_id = order_id
+        self.afnd_integration.tracking_cancelled()
+        if dialog is not None:
+            self.page.close(dialog)
+        self.render()
+        self.page.open(ft.SnackBar(ft.Text(message), bgcolor=SUCCESS))
 
     def logout(self):
         self.usuario_autenticado = None

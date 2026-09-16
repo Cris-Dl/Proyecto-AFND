@@ -27,6 +27,8 @@ TRANSITIONS = {
     ("q4", "R"): frozenset({"q5"}),
     ("q5", "R"): frozenset({"q5"}),
     ("q5", "E"): frozenset({"q6"}),
+    # X representa cancelación o finalización del proceso sin solución.
+    ("q5", "X"): frozenset({"q10"}),
 }
 
 

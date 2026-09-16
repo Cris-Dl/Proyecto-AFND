@@ -4,6 +4,7 @@ import flet_map as fmap
 from services.routing_service import GAMERGEAR_STORE_LABEL
 from ui.theme import (
     BORDER,
+    ERROR,
     PRIMARY,
     SECONDARY,
     SUCCESS,
@@ -63,6 +64,7 @@ def build_tracking_view(
     on_back,
     on_advance,
     on_deliver,
+    on_cancel,
     layout_mode="wide",
 ):
     route_coordinates = route_result.primary.coordinates
@@ -70,11 +72,21 @@ def build_tracking_view(
     last_index = len(simulation_points) - 1
     progress_index = min(max(0, progress_index), last_index)
     delivered = order.estado_afnd == "q6"
+    cancelled = order.estado_afnd == "q10"
+    in_transit = order.estado_afnd == "q5"
     at_destination = progress_index == last_index
     remaining_steps = last_index - progress_index
     remaining_seconds = route_result.primary.duration_seconds * remaining_steps / max(1, last_index)
     remaining_minutes = max(1, round(remaining_seconds / 60))
-    eta = "Entregado" if delivered else "Llegando" if at_destination else f"{remaining_minutes} min aprox."
+    eta = (
+        "Entregado"
+        if delivered
+        else "Seguimiento finalizado"
+        if cancelled
+        else "Llegando"
+        if at_destination
+        else f"{remaining_minutes} min aprox."
+    )
 
     route_points = [_point(*coordinates) for coordinates in route_coordinates]
     origin = route_coordinates[0]
@@ -86,7 +98,7 @@ def build_tracking_view(
         _marker(
             simulation_points[progress_index],
             ft.Icons.LOCAL_SHIPPING_ROUNDED,
-            SUCCESS if delivered else PRIMARY,
+            SUCCESS if delivered else ERROR if cancelled else PRIMARY,
             "Vehículo simulado",
         ),
     ]
@@ -180,18 +192,28 @@ def build_tracking_view(
                     content=ft.Row(
                         controls=[
                             ft.Icon(
-                                ft.Icons.CHECK_CIRCLE_ROUNDED if delivered else ft.Icons.LOCAL_SHIPPING_ROUNDED,
-                                color=SUCCESS if delivered else PRIMARY,
+                                ft.Icons.CHECK_CIRCLE_ROUNDED
+                                if delivered
+                                else ft.Icons.CANCEL_ROUNDED
+                                if cancelled
+                                else ft.Icons.LOCAL_SHIPPING_ROUNDED,
+                                color=SUCCESS if delivered else ERROR if cancelled else PRIMARY,
                             ),
                             ft.Column(
                                 controls=[
                                     ft.Text(
-                                        "Entregado" if delivered else "En ruta",
+                                        "Entregado" if delivered else "Pedido cancelado" if cancelled else "En ruta",
                                         size=15,
-                                        color=SUCCESS if delivered else PRIMARY,
+                                        color=SUCCESS if delivered else ERROR if cancelled else PRIMARY,
                                         weight=ft.FontWeight.BOLD,
                                     ),
                                     ft.Text(f"ETA aproximada: {eta}", size=11, color=TEXT_SECONDARY),
+                                    ft.Text(
+                                        "El seguimiento de este pedido ha finalizado.",
+                                        size=10,
+                                        color=TEXT_SECONDARY,
+                                        visible=cancelled,
+                                    ),
                                     ft.Text(
                                         f"Distancia: {route_result.primary.distance_meters / 1000:.1f} km",
                                         size=11,
@@ -208,16 +230,33 @@ def build_tracking_view(
                 ft.Text("Progreso", size=12, color=TEXT_PRIMARY, weight=ft.FontWeight.W_600),
                 ft.ProgressBar(
                     value=1 if delivered else progress_index / max(1, last_index),
-                    color=SUCCESS if delivered else PRIMARY,
+                    color=SUCCESS if delivered else ERROR if cancelled else PRIMARY,
                     bgcolor=BORDER,
                 ),
                 ft.Column(
-                    controls=[
-                        _timeline_item("Pedido confirmado", "done"),
-                        _timeline_item("Preparando envío", "done"),
-                        _timeline_item("En ruta", "done" if delivered else "active"),
-                        _timeline_item("Entregado", "done" if delivered else "active" if at_destination else "pending"),
-                    ],
+                    controls=(
+                        [
+                            _timeline_item("Pedido confirmado", "done"),
+                            _timeline_item("Preparando envío", "done"),
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.CANCEL_ROUNDED, size=18, color=ERROR),
+                                    ft.Text("Pedido cancelado", size=12, color=ERROR),
+                                ],
+                                spacing=9,
+                            ),
+                        ]
+                        if cancelled
+                        else [
+                            _timeline_item("Pedido confirmado", "done"),
+                            _timeline_item("Preparando envío", "done"),
+                            _timeline_item("En ruta", "done" if delivered else "active"),
+                            _timeline_item(
+                                "Entregado",
+                                "done" if delivered else "active" if at_destination else "pending",
+                            ),
+                        ]
+                    ),
                     spacing=9,
                 ),
                 ft.Divider(color=BORDER, height=16),
@@ -225,7 +264,8 @@ def build_tracking_view(
                     "Simular avance",
                     icon=ft.Icons.NAVIGATION_ROUNDED,
                     width=float("inf"),
-                    disabled=delivered or at_destination,
+                    visible=in_transit,
+                    disabled=at_destination,
                     on_click=lambda _: on_advance(),
                     style=ft.ButtonStyle(bgcolor=PRIMARY, color="#031018"),
                 ),
@@ -233,10 +273,18 @@ def build_tracking_view(
                     "Confirmar entrega",
                     icon=ft.Icons.INVENTORY_ROUNDED,
                     width=float("inf"),
-                    visible=not delivered,
+                    visible=in_transit,
                     disabled=not at_destination,
                     on_click=lambda _: on_deliver(),
                     style=ft.ButtonStyle(bgcolor=SUCCESS, color="#031018"),
+                ),
+                ft.OutlinedButton(
+                    "Cancelar pedido",
+                    icon=ft.Icons.CANCEL_OUTLINED,
+                    width=float("inf"),
+                    visible=in_transit,
+                    on_click=lambda _: on_cancel(order.id_pedido),
+                    style=ft.ButtonStyle(color=ERROR, side=ft.BorderSide(1, ERROR)),
                 ),
             ],
             spacing=12,

@@ -1,13 +1,21 @@
 import flet as ft
 
-from ui.theme import BORDER, PRIMARY, SUCCESS, SURFACE, SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_SECONDARY
+from ui.theme import BORDER, ERROR, PRIMARY, SUCCESS, SURFACE, SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_SECONDARY
 
 
-def _order_card(order, on_track):
+def _order_card(order, on_track, on_cancel):
     in_transit = order.estado_afnd == "q5"
     delivered = order.estado_afnd == "q6"
-    status_label = "En ruta" if in_transit else "Entregado" if delivered else "Procesando"
-    status_color = PRIMARY if in_transit else SUCCESS if delivered else TEXT_SECONDARY
+    cancelled = order.estado_afnd == "q10"
+    status_label = "En ruta" if in_transit else "Entregado" if delivered else "Cancelado" if cancelled else "Procesando"
+    status_color = PRIMARY if in_transit else SUCCESS if delivered else ERROR if cancelled else TEXT_SECONDARY
+    status_icon = (
+        ft.Icons.CANCEL_ROUNDED
+        if cancelled
+        else ft.Icons.CHECK_CIRCLE_ROUNDED
+        if delivered
+        else ft.Icons.ROUTE_ROUNDED
+    )
 
     return ft.Container(
         col={"xs": 12, "lg": 6},
@@ -45,10 +53,7 @@ def _order_card(order, on_track):
                             spacing=2,
                             expand=True,
                         ),
-                        ft.Icon(
-                            ft.Icons.CHECK_CIRCLE_ROUNDED if delivered else ft.Icons.ROUTE_ROUNDED,
-                            color=status_color,
-                        ),
+                        ft.Icon(status_icon, color=status_color),
                     ],
                     spacing=12,
                 ),
@@ -69,13 +74,21 @@ def _order_card(order, on_track):
                     on_click=lambda _: on_track(order.id_pedido),
                     style=ft.ButtonStyle(bgcolor=PRIMARY, color="#031018"),
                 ),
+                ft.OutlinedButton(
+                    "Cancelar pedido",
+                    icon=ft.Icons.CANCEL_OUTLINED,
+                    visible=in_transit,
+                    width=float("inf"),
+                    on_click=lambda _: on_cancel(order.id_pedido),
+                    style=ft.ButtonStyle(color=ERROR, side=ft.BorderSide(1, ERROR)),
+                ),
             ],
             spacing=10,
         ),
     )
 
 
-def build_orders_view(username, orders, on_login, on_track):
+def build_orders_view(username, orders, on_login, on_track, on_cancel):
     if not username:
         return ft.Container(
             expand=True,
@@ -103,7 +116,7 @@ def build_orders_view(username, orders, on_login, on_track):
 
     content = (
         ft.ResponsiveRow(
-            controls=[_order_card(order, on_track) for order in orders],
+            controls=[_order_card(order, on_track, on_cancel) for order in orders],
             spacing=14,
             run_spacing=14,
         )

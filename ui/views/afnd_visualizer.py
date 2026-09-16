@@ -41,7 +41,7 @@ TRANSITION_LABELS = (
     "q3 —D→ {q7, q8, q9}",
     "q7 —S→ q3    q8 —B→ q3    q9 —V→ q3",
     "q3/q7/q8/q9 —X→ q10",
-    "q5 —R→ q5    q5 —E→ q6",
+    "q5 —R→ q5    q5 —E→ q6    q5 —X→ q10",
 )
 
 
