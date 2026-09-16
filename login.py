@@ -158,11 +158,18 @@ def iniciar_sesion_camara(rostros_registrados):
     return usuario_encontrado
 
 class VistaLogin(ft.Column):
-    def __init__(self, page: ft.Page):
+    def __init__(self, page: ft.Page, on_auth_success=None):
         super().__init__()
         self.main_page = page
+        self.on_auth_success = on_auth_success
+        self.usuario_autenticado = None
         self.horizontal_alignment = ft.CrossAxisAlignment.CENTER
         self.construir_menu_principal()
+
+    def notificar_autenticacion(self, usuario):
+        self.usuario_autenticado = usuario
+        if self.on_auth_success:
+            self.on_auth_success(usuario)
 
     def mostrar_mensaje(self, texto, color):
         self.main_page.snack_bar = ft.SnackBar(ft.Text(texto), bgcolor=color)
@@ -235,6 +242,7 @@ class VistaLogin(ft.Column):
 
         if resultado:
             self.mostrar_mensaje(f"Confirmación: Bienvenido {resultado[0]}", ft.Colors.GREEN)
+            self.notificar_autenticacion(u)
         else:
             self.mostrar_mensaje("Usuario o contraseña incorrectos", ft.Colors.RED)
 
@@ -278,6 +286,7 @@ class VistaLogin(ft.Column):
 
         if usuario_match:
             self.mostrar_mensaje(f"Confirmación: Face ID aceptado. ¡Bienvenido {usuario_match}!", ft.Colors.GREEN)
+            self.notificar_autenticacion(usuario_match)
         else:
             self.mostrar_mensaje("Face ID inválido. El rostro no pertenece a ningún usuario.", ft.Colors.RED)
 
