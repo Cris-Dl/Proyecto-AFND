@@ -5,6 +5,7 @@ from .login_view import build_login_view
 from .placeholder import build_placeholder_view
 from .product_detail import build_product_detail_view
 from .products import build_products_view
+from .profile import build_profile_view
 
 __all__ = [
     "build_home_view",
@@ -12,4 +13,5 @@ __all__ = [
     "build_placeholder_view",
     "build_product_detail_view",
     "build_products_view",
+    "build_profile_view",
 ]

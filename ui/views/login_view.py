@@ -37,6 +37,7 @@ class GamerGearLoginView(VistaLogin):
         self.active_view = "menu"
         self.face_status_text = None
         self.face_status_icon = None
+        self.scroll_host = None
         super().__init__(page, on_auth_success=on_auth_success)
 
     def actualizar_pantalla(self):
@@ -68,6 +69,7 @@ class GamerGearLoginView(VistaLogin):
         self.limpiar_vista()
         self.controls.append(
             ft.Container(
+                width=float("inf"),
                 bgcolor=SURFACE_ELEVATED,
                 border=ft.border.all(1, BORDER),
                 border_radius=22,
@@ -85,6 +87,11 @@ class GamerGearLoginView(VistaLogin):
             )
         )
         self.actualizar_pantalla()
+        if self.scroll_host:
+            try:
+                self.scroll_host.scroll_to(offset=0, duration=120)
+            except (AssertionError, RuntimeError):
+                pass
 
     def _method_card(self, icon, title, description, on_click, accent):
         return ft.Container(
@@ -281,7 +288,7 @@ class GamerGearLoginView(VistaLogin):
             border_color=BORDER,
             focused_border_color=PRIMARY,
             bgcolor=SURFACE,
-            options=[ft.dropdown.Option("Masculino"), ft.dropdown.Option("Femenino"), ft.dropdown.Option("Otro")],
+            options=[ft.dropdown.Option("Masculino"), ft.dropdown.Option("Femenino")],
         )
         self.reg_telefono = _text_field("Teléfono", ft.Icons.PHONE_OUTLINED)
         self.reg_direccion = _text_field("Dirección de entrega", ft.Icons.LOCATION_ON_OUTLINED)
@@ -359,7 +366,8 @@ class GamerGearLoginView(VistaLogin):
 
 
 def build_login_view(page, on_auth_success, on_back):
-    return ft.Column(
+    auth_view = GamerGearLoginView(page, on_auth_success=on_auth_success)
+    login_view = ft.Column(
         controls=[
             ft.TextButton(
                 "Volver",
@@ -370,7 +378,7 @@ def build_login_view(page, on_auth_success, on_back):
                 controls=[
                     ft.Container(
                         col={"xs": 12, "md": 10, "lg": 8, "xl": 7},
-                        content=GamerGearLoginView(page, on_auth_success=on_auth_success),
+                        content=auth_view,
                     )
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -379,3 +387,5 @@ def build_login_view(page, on_auth_success, on_back):
         scroll=ft.ScrollMode.AUTO,
         expand=True,
     )
+    auth_view.scroll_host = login_view
+    return login_view

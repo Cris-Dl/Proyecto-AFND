@@ -14,6 +14,78 @@ try:
 except ImportError:
     IA_DISPONIBLE = False
 
+
+COLOR_FACE_CYAN = (235, 210, 35)
+COLOR_FACE_GREEN = (105, 205, 105)
+COLOR_FACE_AMBER = (45, 185, 245)
+COLOR_FACE_RED = (95, 95, 245)
+
+
+def _dibujar_esquinas_rostro(display_frame, top, right, bottom, left, color):
+    largo = max(18, min(right - left, bottom - top) // 5)
+    grosor = 3
+
+    for inicio, fin in (
+        ((left, top + largo), (left, top)),
+        ((left, top), (left + largo, top)),
+        ((right - largo, top), (right, top)),
+        ((right, top), (right, top + largo)),
+        ((left, bottom - largo), (left, bottom)),
+        ((left, bottom), (left + largo, bottom)),
+        ((right - largo, bottom), (right, bottom)),
+        ((right, bottom - largo), (right, bottom)),
+    ):
+        cv2.line(display_frame, inicio, fin, color, grosor)
+
+
+def _presentar_face_id(display_frame, estado, color, rostro=None, progreso=None):
+    """Añade únicamente presentación sobre una copia del frame de cámara."""
+    alto, ancho, _ = display_frame.shape
+
+    if rostro:
+        top, right, bottom, left = rostro
+        top = max(0, min(top, alto - 1))
+        bottom = max(top + 1, min(bottom, alto))
+        left = max(0, min(left, ancho - 1))
+        right = max(left + 1, min(right, ancho))
+
+        original_visible = display_frame[top:bottom, left:right].copy()
+        capa_oscura = display_frame.copy()
+        cv2.rectangle(capa_oscura, (0, 0), (ancho, alto), (5, 12, 18), -1)
+        display_frame = cv2.addWeighted(display_frame, 0.68, capa_oscura, 0.32, 0)
+        display_frame[top:bottom, left:right] = original_visible
+        _dibujar_esquinas_rostro(display_frame, top, right, bottom, left, color)
+
+    cv2.rectangle(display_frame, (18, 16), (ancho - 18, 76), (8, 20, 29), -1)
+    cv2.putText(
+        display_frame,
+        "GAMERGEAR  FACE ID",
+        (34, 40),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.52,
+        COLOR_FACE_CYAN,
+        1,
+    )
+    cv2.putText(
+        display_frame,
+        estado,
+        (34, 64),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.58,
+        color,
+        2,
+    )
+
+    if progreso is not None:
+        margen = 34
+        y_inferior = alto - 24
+        ancho_barra = max(1, ancho - (margen * 2))
+        avance = int(ancho_barra * max(0.0, min(progreso, 1.0)))
+        cv2.rectangle(display_frame, (margen, y_inferior), (ancho - margen, y_inferior + 7), (52, 65, 73), -1)
+        cv2.rectangle(display_frame, (margen, y_inferior), (margen + avance, y_inferior + 7), color, -1)
+
+    return display_frame
+
 def inicializar_bd():
     conexion = sqlite3.connect(DB_PATH)
     cursor = conexion.cursor()
@@ -51,6 +123,7 @@ def registrar_rostro_camara():
 
         frame = cv2.flip(frame, 1)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        display_frame = frame.copy()
 
         frame_pequeno = cv2.resize(rgb_frame, (0, 0), fx=0.5, fy=0.5)
         localizaciones = face_recognition.face_locations(frame_pequeno)
@@ -60,19 +133,24 @@ def registrar_rostro_camara():
         if len(localizaciones) == 1:
             cuadros_consecutivos += 1
             top, right, bottom, left = [coord * 2 for coord in localizaciones[0]]
-
-            cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-            cv2.putText(frame, "Mantente quieto...", (left, top - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-
-            progreso = int((cuadros_consecutivos / UMBRAL_DETECCION) * 300)
-            cv2.rectangle(frame, (50, alto - 40), (50 + progreso, alto - 20), (0, 255, 0), -1)
-            cv2.rectangle(frame, (50, alto - 40), (350, alto - 20), (255, 255, 255), 2)
+            display_frame = _presentar_face_id(
+                display_frame,
+                "CAPTURANDO BIOMETRIA",
+                COLOR_FACE_CYAN,
+                rostro=(top, right, bottom, left),
+                progreso=cuadros_consecutivos / UMBRAL_DETECCION,
+            )
 
             if cuadros_consecutivos >= UMBRAL_DETECCION:
-                cv2.putText(frame, "¡ESCANEO EXITOSO!", (left, bottom + 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 200, 0), 2)
-                cv2.imshow("Escaneando Biometria Facial...", frame)
+                display_frame = frame.copy()
+                display_frame = _presentar_face_id(
+                    display_frame,
+                    "REGISTRO COMPLETADO",
+                    COLOR_FACE_GREEN,
+                    rostro=(top, right, bottom, left),
+                    progreso=1,
+                )
+                cv2.imshow("Escaneando Biometria Facial...", display_frame)
                 cv2.waitKey(1000)
 
                 encodings = face_recognition.face_encodings(rgb_frame, [(top, right, bottom, left)])
@@ -81,10 +159,10 @@ def registrar_rostro_camara():
                     break
         else:
             cuadros_consecutivos = 0
-            mensaje = "Mirando a la camara..." if len(localizaciones) == 0 else "Multiples rostros detectados."
-            cv2.putText(frame, mensaje, (50, alto - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            mensaje = "UBICA TU ROSTRO" if len(localizaciones) == 0 else "USA UN SOLO ROSTRO"
+            display_frame = _presentar_face_id(display_frame, mensaje, COLOR_FACE_AMBER, progreso=0)
 
-        cv2.imshow("Escaneando Biometria Facial...", frame)
+        cv2.imshow("Escaneando Biometria Facial...", display_frame)
         if cv2.waitKey(30) & 0xFF == 27:
             break
 
@@ -110,15 +188,19 @@ def iniciar_sesion_camara(rostros_registrados):
 
         frame = cv2.flip(frame, 1)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        display_frame = frame.copy()
 
         frame_pequeno = cv2.resize(rgb_frame, (0, 0), fx=0.5, fy=0.5)
         localizaciones = face_recognition.face_locations(frame_pequeno)
 
         if len(localizaciones) == 1:
             top, right, bottom, left = [coord * 2 for coord in localizaciones[0]]
-            cv2.rectangle(frame, (left, top), (right, bottom), (255, 200, 0), 2)
-            cv2.putText(frame, "Identificando...", (left, top - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 200, 0), 2)
+            display_frame = _presentar_face_id(
+                display_frame,
+                "VERIFICANDO IDENTIDAD",
+                COLOR_FACE_CYAN,
+                rostro=(top, right, bottom, left),
+            )
 
             encodings = face_recognition.face_encodings(rgb_frame, [(top, right, bottom, left)])
             if len(encodings) > 0:
@@ -127,29 +209,32 @@ def iniciar_sesion_camara(rostros_registrados):
                     coincidencias = face_recognition.compare_faces([db_encoding], rostro_vivo, tolerance=0.5)
                     if coincidencias[0]:
                         usuario_encontrado = usuario
-
-                        cv2.putText(frame, f"HOLA {usuario.upper()}", (left, bottom + 30),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-                        cv2.imshow("Autenticacion Face ID", frame)
+                        display_frame = frame.copy()
+                        display_frame = _presentar_face_id(
+                            display_frame,
+                            f"IDENTIDAD CONFIRMADA: {usuario.upper()}",
+                            COLOR_FACE_GREEN,
+                            rostro=(top, right, bottom, left),
+                        )
+                        cv2.imshow("Autenticacion Face ID", display_frame)
                         cv2.waitKey(1500)
                         break
 
                 if usuario_encontrado:
                     break
         else:
-            cv2.putText(frame, "Ubica tu rostro en la camara...", (30, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            mensaje = "UBICA TU ROSTRO" if len(localizaciones) == 0 else "USA UN SOLO ROSTRO"
+            display_frame = _presentar_face_id(display_frame, mensaje, COLOR_FACE_AMBER)
 
         # Timeout de 10 segundos para dar error visual
         if time.time() - tiempo_inicio > 10:
-            alto, ancho, _ = frame.shape
-            cv2.putText(frame, "FACE ID INVALIDO", (ancho // 2 - 150, alto // 2),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
-            cv2.imshow("Autenticacion Face ID", frame)
+            display_frame = frame.copy()
+            display_frame = _presentar_face_id(display_frame, "FACE ID NO VALIDO", COLOR_FACE_RED)
+            cv2.imshow("Autenticacion Face ID", display_frame)
             cv2.waitKey(1500)  # Muestra el error un momento antes de cerrar
             break
 
-        cv2.imshow("Autenticacion Face ID", frame)
+        cv2.imshow("Autenticacion Face ID", display_frame)
         if cv2.waitKey(30) & 0xFF == 27:
             break
 
@@ -311,7 +396,7 @@ class VistaLogin(ft.Column):
         self.reg_sexo = ft.Dropdown(
             label="Sexo",
             width=300,
-            options=[ft.dropdown.Option("Masculino"), ft.dropdown.Option("Femenino"), ft.dropdown.Option("Otro")]
+            options=[ft.dropdown.Option("Masculino"), ft.dropdown.Option("Femenino")]
         )
         self.reg_telefono = ft.TextField(label="Teléfono", width=300, prefix_icon=ft.Icons.PHONE)
         self.reg_direccion = ft.TextField(label="Dirección de Entrega", width=300, prefix_icon=ft.Icons.LOCATION_ON)

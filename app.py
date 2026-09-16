@@ -11,6 +11,7 @@ from ui.views import (
     build_placeholder_view,
     build_product_detail_view,
     build_products_view,
+    build_profile_view,
 )
 
 
@@ -118,10 +119,10 @@ class GamerGearApp:
             )
 
         if self.current_route == "perfil":
-            return build_placeholder_view(
-                "Perfil",
-                "Esta sección se integrará en la siguiente fase.",
-                ft.Icons.PERSON_ROUNDED,
+            return build_profile_view(
+                usuario=self.usuario_autenticado,
+                on_login=self.open_account,
+                on_logout=self.logout,
             )
 
         if self.current_route == "login":
@@ -177,6 +178,14 @@ class GamerGearApp:
         if destination == "login":
             destination = "inicio"
         self.navigate(destination)
+
+    def logout(self):
+        self.usuario_autenticado = None
+        self.route_before_login = "inicio"
+        if self.current_route == "perfil":
+            self.current_route = "inicio"
+        self.selected_product = None
+        self.render()
 
     def retry_products(self):
         self.products_loading = True
