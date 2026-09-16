@@ -74,50 +74,106 @@ def _result_label(result):
     return "No aceptada", WARNING
 
 
+def _sorted_states(states):
+    return sorted(states, key=lambda state: int(state[1:]))
+
+
+def _active_state_chips(active_states):
+    states = _sorted_states(active_states)
+    chips = [
+        ft.Text("Estados activos:", size=12, color=TEXT_PRIMARY, weight=ft.FontWeight.BOLD)
+    ]
+    if not states:
+        chips.append(
+            ft.Container(
+                bgcolor=SURFACE,
+                border=ft.border.all(1, BORDER),
+                border_radius=12,
+                padding=ft.padding.symmetric(horizontal=10, vertical=5),
+                content=ft.Text("∅", size=10, color=TEXT_SECONDARY),
+            )
+        )
+    else:
+        chips.extend(
+            ft.Container(
+                bgcolor="#0B2D38",
+                border=ft.border.all(1, PRIMARY),
+                border_radius=12,
+                padding=ft.padding.symmetric(horizontal=10, vertical=5),
+                content=ft.Text(
+                    f"{state} {STATE_LABELS[state]}",
+                    size=10,
+                    color=PRIMARY,
+                    weight=ft.FontWeight.W_600,
+                ),
+            )
+            for state in states
+        )
+    return ft.Row(controls=chips, spacing=7, run_spacing=7, wrap=True)
+
+
+def _state_badges(state):
+    badges = []
+    if state == INITIAL_STATE:
+        badges.append(("Inicial", SECONDARY, "#241B46"))
+    if state == ACCEPTING_STATE:
+        badges.append(("Aceptación", SUCCESS, "#0D342D"))
+    if state == REJECTING_STATE:
+        badges.append(("Rechazo", ERROR, "#3A1822"))
+    return ft.Row(
+        controls=[
+            ft.Container(
+                bgcolor=background,
+                border=ft.border.all(1, color),
+                border_radius=9,
+                padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                content=ft.Text(label, size=8, color=color, weight=ft.FontWeight.W_600),
+            )
+            for label, color, background in badges
+        ],
+        spacing=4,
+        visible=bool(badges),
+    )
+
+
 def _state_node(state, active):
     is_active = state in active
     if is_active:
-        color, background = PRIMARY, "#123747"
-    elif state == ACCEPTING_STATE:
-        color, background = SUCCESS, SURFACE
-    elif state == REJECTING_STATE:
-        color, background = ERROR, SURFACE
-    elif state == INITIAL_STATE:
-        color, background = SECONDARY, SURFACE
+        border_color, identifier_color, background = PRIMARY, PRIMARY, "#0B2D38"
     else:
-        color, background = BORDER, SURFACE
-
-    badges = []
-    if state == INITIAL_STATE:
-        badges.append("inicial")
-    if state == ACCEPTING_STATE:
-        badges.append("aceptación")
-    if state == REJECTING_STATE:
-        badges.append("rechazo")
+        border_color, background = "#2B455E", SURFACE
+        if state == INITIAL_STATE:
+            identifier_color = SECONDARY
+        elif state == ACCEPTING_STATE:
+            identifier_color = SUCCESS
+        elif state == REJECTING_STATE:
+            identifier_color = ERROR
+        else:
+            identifier_color = "#A9B8C9"
 
     return ft.Container(
         col={"xs": 6, "sm": 4, "md": 3},
         height=92,
         padding=11,
         bgcolor=background,
-        border=ft.border.all(2 if is_active else 1, color),
+        border=ft.border.all(2 if is_active else 1, border_color),
         border_radius=13,
         content=ft.Column(
             controls=[
                 ft.Row(
                     controls=[
-                        ft.Text(state, size=16, color=color, weight=ft.FontWeight.BOLD),
+                        ft.Text(state, size=16, color=identifier_color, weight=ft.FontWeight.BOLD),
                         ft.Container(expand=True),
                         ft.Icon(
                             ft.Icons.RADIO_BUTTON_CHECKED if is_active else ft.Icons.CIRCLE_OUTLINED,
                             size=15,
-                            color=color,
+                            color=PRIMARY if is_active else "#52677D",
                         ),
                     ],
                     spacing=5,
                 ),
                 ft.Text(STATE_LABELS[state], size=11, color=TEXT_PRIMARY, max_lines=2),
-                ft.Text(" · ".join(badges), size=9, color=color, visible=bool(badges)),
+                _state_badges(state),
             ],
             spacing=4,
         ),
@@ -138,6 +194,7 @@ def _diagram(active_states):
                     size=11,
                     color=TEXT_SECONDARY,
                 ),
+                _active_state_chips(active_states),
                 ft.ResponsiveRow(
                     controls=[_state_node(f"q{index}", active_states) for index in range(11)],
                     spacing=9,
@@ -167,8 +224,13 @@ def _information_panel(title, subtitle, result, extra_controls=None):
                 ft.Divider(color=BORDER, height=16),
                 ft.Text("Cadena", size=11, color=TEXT_SECONDARY),
                 ft.Text(" → ".join(result.symbols) or "∅", size=17, color=PRIMARY, weight=ft.FontWeight.BOLD),
-                ft.Text("Estados activos", size=11, color=TEXT_SECONDARY),
-                ft.Text(_format_states(result.active_states), size=15, color=TEXT_PRIMARY),
+                ft.Text("Estados activos", size=13, color=TEXT_PRIMARY, weight=ft.FontWeight.BOLD),
+                ft.Text(
+                    _format_states(result.active_states),
+                    size=18,
+                    color=PRIMARY,
+                    weight=ft.FontWeight.BOLD,
+                ),
                 ft.Text(status, size=12, color=status_color, weight=ft.FontWeight.W_600),
                 ft.Divider(color=BORDER, height=16),
                 ft.Text("Historial", size=12, color=TEXT_PRIMARY, weight=ft.FontWeight.W_600),
