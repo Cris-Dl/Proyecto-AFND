@@ -8,12 +8,12 @@ def _product_image(producto, compact):
     if thumbnail:
         return ft.Image(
             src=thumbnail,
-            height=118 if compact else 154,
+            height=100 if compact else 126,
             fit=ft.ImageFit.CONTAIN,
         )
 
     return ft.Container(
-        height=118 if compact else 154,
+        height=100 if compact else 126,
         alignment=ft.alignment.center,
         content=ft.Icon(ft.Icons.IMAGE_NOT_SUPPORTED_OUTLINED, size=42, color=TEXT_SECONDARY),
     )
@@ -27,8 +27,8 @@ def build_product_card(producto, on_view=None, compact=False):
     return ft.Container(
         bgcolor=SURFACE_ELEVATED,
         border=ft.border.all(1, BORDER),
-        border_radius=18,
-        padding=18,
+        border_radius=16,
+        padding=14,
         shadow=ft.BoxShadow(
             blur_radius=20,
             color="#18000000",
@@ -39,9 +39,9 @@ def build_product_card(producto, on_view=None, compact=False):
                 ft.Container(
                     content=_product_image(producto, compact),
                     bgcolor="#0A1624",
-                    border_radius=14,
+                    border_radius=12,
                     alignment=ft.alignment.center,
-                    padding=10,
+                    padding=7,
                 ),
                 ft.Text(
                     producto["categoria"],
@@ -49,19 +49,22 @@ def build_product_card(producto, on_view=None, compact=False):
                     color=PRIMARY,
                     weight=ft.FontWeight.W_600,
                 ),
-                ft.Text(
-                    producto["nombre"],
-                    size=16,
-                    color=TEXT_PRIMARY,
-                    weight=ft.FontWeight.W_600,
-                    max_lines=2,
-                    overflow=ft.TextOverflow.ELLIPSIS,
+                ft.Container(
+                    height=42,
+                    content=ft.Text(
+                        producto["nombre"],
+                        size=15,
+                        color=TEXT_PRIMARY,
+                        weight=ft.FontWeight.W_600,
+                        max_lines=2,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                    ),
                 ),
                 ft.Row(
                     controls=[
                         ft.Text(
                             f"Q{producto['precio']:.2f}",
-                            size=18,
+                            size=17,
                             color=TEXT_PRIMARY,
                             weight=ft.FontWeight.BOLD,
                         ),
@@ -80,6 +83,6 @@ def build_product_card(producto, on_view=None, compact=False):
                     style=ft.ButtonStyle(color=PRIMARY),
                 ),
             ],
-            spacing=10,
+            spacing=7,
         ),
     )

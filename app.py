@@ -14,6 +14,10 @@ from ui.views import (
 )
 
 
+NARROW_BREAKPOINT = 760
+WIDE_BREAKPOINT = 1180
+
+
 class GamerGearApp:
     def __init__(self, page: ft.Page):
         self.page = page
@@ -24,7 +28,8 @@ class GamerGearApp:
         self.products_error = None
         self.search_query = ""
         self.selected_product = None
-        self.compact_navigation = (page.width or 1200) < 900
+        self.layout_mode = self.get_layout_mode(page.width or WIDE_BREAKPOINT)
+        self.compact_navigation = self.layout_mode != "wide"
         self.secondary_navigation = []
 
         configure_page(page)
@@ -48,6 +53,17 @@ class GamerGearApp:
         page.add(self.shell)
         page.run_task(self.load_products)
 
+    @staticmethod
+    def get_layout_mode(width):
+        if width < NARROW_BREAKPOINT:
+            return "narrow"
+        if width < WIDE_BREAKPOINT:
+            return "medium"
+        return "wide"
+
+    def cards_per_row(self):
+        return {"narrow": 1, "medium": 2, "wide": 3}[self.layout_mode]
+
     def selected_navigation_route(self):
         if self.current_route == "detalle":
             return "productos"
@@ -64,10 +80,11 @@ class GamerGearApp:
             usuario=self.usuario_autenticado,
             on_account=self.open_account,
             on_search=self.search_products,
+            compact=self.layout_mode == "narrow",
         )
         self.view_host.padding = ft.padding.symmetric(
-            horizontal=18 if self.compact_navigation else 30,
-            vertical=20,
+            horizontal={"narrow": 12, "medium": 20, "wide": 26}[self.layout_mode],
+            vertical=16,
         )
         self.view_host.content = self.build_current_view()
 
@@ -83,6 +100,7 @@ class GamerGearApp:
                 on_retry=self.retry_products,
                 on_view=self.open_product,
                 initial_query=self.search_query,
+                columns=self.cards_per_row(),
             )
 
         if self.current_route == "detalle" and self.selected_product:
@@ -119,6 +137,8 @@ class GamerGearApp:
             on_explore=lambda: self.navigate("productos"),
             on_retry=self.retry_products,
             on_view=self.open_product,
+            columns=self.cards_per_row(),
+            wide_layout=self.layout_mode == "wide",
         )
 
     def navigate(self, route):
@@ -170,9 +190,10 @@ class GamerGearApp:
             self.render()
 
     def handle_resize(self, _):
-        compact = (self.page.width or 1200) < 900
-        if compact != self.compact_navigation:
-            self.compact_navigation = compact
+        layout_mode = self.get_layout_mode(self.page.width or WIDE_BREAKPOINT)
+        if layout_mode != self.layout_mode:
+            self.layout_mode = layout_mode
+            self.compact_navigation = layout_mode != "wide"
             self.render()
 
 

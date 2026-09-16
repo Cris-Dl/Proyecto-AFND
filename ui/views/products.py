@@ -5,7 +5,7 @@ from ui.theme import BORDER, PRIMARY, SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_SECON
 from ui.views.common import build_status_panel
 
 
-def build_products_view(productos, loading, error, on_retry, on_view, initial_query=""):
+def build_products_view(productos, loading, error, on_retry, on_view, initial_query="", columns=3):
     if loading:
         return build_status_panel(
             ft.Icons.DOWNLOADING_ROUNDED,
@@ -35,7 +35,7 @@ def build_products_view(productos, loading, error, on_retry, on_view, initial_qu
         ]
         results.controls = [
             ft.Container(
-                col={"sm": 12, "md": 6, "lg": 4, "xl": 3},
+                col=12 // columns,
                 content=build_product_card(producto, on_view=on_view),
             )
             for producto in filtered

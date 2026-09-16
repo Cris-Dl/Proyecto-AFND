@@ -34,7 +34,7 @@ def _nav_item(route, label, icon, selected, compact, on_navigate):
         ),
         bgcolor=SURFACE_ELEVATED if is_selected else None,
         border_radius=12,
-        padding=ft.padding.symmetric(horizontal=16, vertical=13),
+        padding=ft.padding.symmetric(horizontal=13, vertical=11),
         tooltip=label if compact else None,
         on_click=lambda _: on_navigate(route),
     )
@@ -61,15 +61,15 @@ def build_sidebar(selected, on_navigate, compact=False, secondary_items=None):
         controls=[
             ft.Container(
                 content=ft.Icon(ft.Icons.SPORTS_ESPORTS_ROUNDED, color=BACKGROUND, size=25),
-                width=42,
-                height=42,
+                width=38,
+                height=38,
                 bgcolor=PRIMARY,
                 border_radius=13,
                 alignment=ft.alignment.center,
             ),
             ft.Text(
                 "GamerGear",
-                size=20,
+                size=19,
                 weight=ft.FontWeight.BOLD,
                 color=TEXT_PRIMARY,
                 visible=not compact,
@@ -80,14 +80,14 @@ def build_sidebar(selected, on_navigate, compact=False, secondary_items=None):
     )
 
     return ft.Container(
-        width=88 if compact else 244,
+        width=76 if compact else 220,
         bgcolor=SURFACE,
         border=ft.border.only(right=ft.BorderSide(1, BORDER)),
-        padding=ft.padding.symmetric(horizontal=14, vertical=22),
+        padding=ft.padding.symmetric(horizontal=11, vertical=18),
         content=ft.Column(
             controls=[
                 brand,
-                ft.Container(height=28),
+                ft.Container(height=22),
                 *navigation,
                 *secondary_controls,
                 ft.Container(expand=True),
