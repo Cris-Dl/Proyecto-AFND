@@ -91,7 +91,12 @@ def build_tracking_view(
         max_zoom=19,
         interaction_configuration=fmap.MapInteractionConfiguration(flags=fmap.MapInteractiveFlag.ALL),
         layers=[
-            fmap.TileLayer(url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+            fmap.TileLayer(
+                url_template=(
+                    "https://server.arcgisonline.com/ArcGIS/rest/services/"
+                    "World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+                )
+            ),
             fmap.PolylineLayer(
                 polylines=[
                     fmap.PolylineMarker(
@@ -107,7 +112,7 @@ def build_tracking_view(
             fmap.RichAttribution(
                 attributions=[
                     fmap.TextSourceAttribution(
-                        text="OpenStreetMap contributors",
+                        text="Esri and data providers",
                         prepend_copyright=True,
                     )
                 ]
@@ -133,7 +138,12 @@ def build_tracking_view(
                 ft.Row(
                     controls=[
                         ft.Icon(ft.Icons.PUBLIC_ROUNDED, size=14, color=TEXT_SECONDARY),
-                        ft.Text("© OpenStreetMap contributors", size=10, color=TEXT_SECONDARY),
+                        ft.Text(
+                            "Tiles © Esri · Sources: Esri, HERE, Garmin, USGS, "
+                            "© OpenStreetMap contributors and the GIS User Community",
+                            size=9,
+                            color=TEXT_SECONDARY,
+                        ),
                         ft.Container(expand=True),
                         ft.Text("Ruta de demostración · Quetzaltenango", size=10, color=TEXT_SECONDARY),
                     ],
