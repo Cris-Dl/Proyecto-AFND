@@ -1,0 +1,128 @@
+import sqlite3
+import tempfile
+import unittest
+from contextlib import closing
+from pathlib import Path
+from unittest.mock import patch
+
+import pedidos_ventas
+import services.orders_service as orders_service_module
+from services.orders_service import OrdersService
+
+
+class OrdersServiceTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.db_path = str(Path(self.temporary_directory.name) / "gamergear.db")
+        self.db_patch = patch.object(pedidos_ventas, "DB_NAME", self.db_path)
+        self.db_patch.start()
+        pedidos_ventas.inicializar_bd_pedidos()
+        self.service = OrdersService(db_path=self.db_path, initialize=False)
+        self.products = [
+            {
+                "id": 7,
+                "nombre": "Laptop de prueba",
+                "precio": 125.50,
+                "categoria": "Computadoras",
+                "existencia": 5,
+                "thumbnail": None,
+            }
+        ]
+
+    def tearDown(self):
+        self.db_patch.stop()
+        self.temporary_directory.cleanup()
+
+    def test_create_order_uses_existing_product_logic_and_persists_q5(self):
+        with patch(
+            "services.orders_service.realizar_pedido",
+            wraps=orders_service_module.realizar_pedido,
+        ) as realizar_pedido_mock:
+            result = self.service.create_order(self.products, "ana", 7, 2)
+
+        self.assertTrue(result.success)
+        realizar_pedido_mock.assert_called_once_with(self.products, 7, 2)
+        self.assertEqual(result.order.estado_afnd, "q5")
+        self.assertEqual(result.order.total, 251.0)
+        self.assertEqual(self.products[0]["existencia"], 3)
+        self.assertEqual(self.service.get_order_by_id(result.order.id_pedido), result.order)
+
+    def test_invalid_quantity_does_not_persist_or_change_stock(self):
+        result = self.service.create_order(self.products, "ana", 7, 8)
+
+        self.assertFalse(result.success)
+        self.assertEqual(self.products[0]["existencia"], 5)
+        self.assertEqual(self.service.get_orders_by_user("ana"), [])
+
+    def test_orders_are_isolated_by_user(self):
+        self.service.create_order(self.products, "ana", 7, 1)
+        self.service.create_order(self.products, "luis", 7, 1)
+
+        ana_orders = self.service.get_orders_by_user("ana")
+        luis_orders = self.service.get_orders_by_user("luis")
+        self.assertEqual([order.usuario for order in ana_orders], ["ana"])
+        self.assertEqual([order.usuario for order in luis_orders], ["luis"])
+
+    def test_order_remains_available_from_a_new_service_instance(self):
+        created = self.service.create_order(self.products, "ana", 7, 1).order
+        restarted_service = OrdersService(db_path=self.db_path, initialize=False)
+
+        self.assertEqual(restarted_service.get_order_by_id(created.id_pedido), created)
+
+    def test_existing_finalize_sale_persists_q6(self):
+        created = self.service.create_order(self.products, "ana", 7, 1).order
+
+        success, _message, delivered = self.service.finish_order(created.id_pedido)
+
+        self.assertTrue(success)
+        self.assertEqual(delivered.estado_afnd, "q6")
+        restarted_service = OrdersService(db_path=self.db_path, initialize=False)
+        self.assertEqual(restarted_service.get_order_by_id(created.id_pedido).estado_afnd, "q6")
+
+    def test_database_uses_only_existing_columns(self):
+        with closing(sqlite3.connect(self.db_path)) as connection:
+            columns = [row[1] for row in connection.execute("PRAGMA table_info(pedidos)")]
+        self.assertEqual(
+            columns,
+            ["id_pedido", "usuario", "producto", "cantidad", "precio", "total", "estado_afnd"],
+        )
+
+    def test_owner_can_cancel_q5_without_changing_financial_data(self):
+        created = self.service.create_order(self.products, "ana", 7, 2).order
+        before = (created.cantidad, created.precio, created.total)
+        stock_after_purchase = self.products[0]["existencia"]
+
+        success, _message, cancelled = self.service.cancel_order(created.id_pedido, "ana")
+
+        self.assertTrue(success)
+        self.assertEqual(cancelled.estado_afnd, "q10")
+        self.assertEqual((cancelled.cantidad, cancelled.precio, cancelled.total), before)
+        self.assertEqual(self.products[0]["existencia"], stock_after_purchase)
+        self.assertEqual(len(self.service.get_orders_by_user("ana")), 1)
+
+    def test_other_user_cannot_cancel_order(self):
+        created = self.service.create_order(self.products, "ana", 7, 1).order
+        success, _message, cancelled = self.service.cancel_order(created.id_pedido, "luis")
+        self.assertFalse(success)
+        self.assertIsNone(cancelled)
+        self.assertEqual(self.service.get_order_by_id(created.id_pedido).estado_afnd, "q5")
+
+    def test_delivered_order_cannot_be_cancelled(self):
+        created = self.service.create_order(self.products, "ana", 7, 1).order
+        self.service.finish_order(created.id_pedido)
+        success, _message, cancelled = self.service.cancel_order(created.id_pedido, "ana")
+        self.assertFalse(success)
+        self.assertIsNone(cancelled)
+        self.assertEqual(self.service.get_order_by_id(created.id_pedido).estado_afnd, "q6")
+
+    def test_cancelled_order_cannot_be_cancelled_twice(self):
+        created = self.service.create_order(self.products, "ana", 7, 1).order
+        self.assertTrue(self.service.cancel_order(created.id_pedido, "ana")[0])
+        success, _message, cancelled = self.service.cancel_order(created.id_pedido, "ana")
+        self.assertFalse(success)
+        self.assertIsNone(cancelled)
+        self.assertEqual(self.service.get_order_by_id(created.id_pedido).estado_afnd, "q10")
+
+
+if __name__ == "__main__":
+    unittest.main()
